@@ -409,7 +409,8 @@ void function() {
     }
 
     function onready() {
-        debugger;
+		// Uncomment if you want to set breakpoints when running in the console
+        //debugger;
 
         // Keep track of duration
         var startTime = performance.now();
