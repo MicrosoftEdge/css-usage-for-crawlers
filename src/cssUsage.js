@@ -14,11 +14,12 @@ void function() {
 	var ua = navigator.userAgent;
 	window.INSTRUMENTATION_RESULTS = {
 		UA: ua.indexOf('Edge')>=0 ? 'EdgeHTML' :ua.indexOf('Chrome')>=0 ? 'Chromium' : 'Gecko',
-		UAString: ua,
-		timestamp: Date.now(),
+		URL: location.href,
+		TIMESTAMP: Date.now(),
 		css: {},
 		dom: {}
 	};
+	window.INSTRUMENTATION_RESULTS_TSV = [];
 	
 }();
 
@@ -701,9 +702,77 @@ void function() {
 
         // Convert it to a more efficient format
 		INSTRUMENTATION_RESULTS.css = CSSUsageResults;
+		console.log(convertToTSV(INSTRUMENTATION_RESULTS));
         //var getValuesOf = Object.values || function(o) { return Object.keys(o).map(function(k) { return o[k]; }) };
         //CSSUsageResults.props = getValuesOf(CSSUsageResults.props);
 
+		function convertToTSV(INSTRUMENTATION_RESULTS) {
+			
+			var VALUE_COLUMN = 3;
+			var finishedRows = [];
+			var currentRowTemplate = [
+				INSTRUMENTATION_RESULTS.UA,
+				INSTRUMENTATION_RESULTS.URL,
+				INSTRUMENTATION_RESULTS.TIMESTAMP,
+				0
+			];
+			
+			currentRowTemplate.push('css');
+			convertToTSV(INSTRUMENTATION_RESULTS['css']);
+			currentRowTemplate.pop();
+			
+			currentRowTemplate.push('dom');
+			convertToTSV(INSTRUMENTATION_RESULTS['dom']);
+			currentRowTemplate.pop();
+			
+			return finishedRows.map((row) => (row.join('\t'))).join('\n');
+			
+			// helper function doing the actual conversion
+			function convertToTSV(object) {
+				if(object==null || object==undefined || typeof object == 'number' || typeof object == 'string') {
+					finishedRows.push(new Row(currentRowTemplate, ''+object));
+				} else {
+					for(var key in object) {
+						if({}.hasOwnProperty.call(object,key)) {
+							currentRowTemplate.push(key);
+							convertToTSV(object[key]);
+							currentRowTemplate.pop();
+						}
+					}
+				}
+			}
+			
+			// constructor for a row of our table
+			function Row(currentRowTemplate, value) {
+				
+				// Initialize an empty row with enough columns
+				var row = [
+					/*UA*/'',
+					/*URL*/'',
+					/*TIMESTAMP*/'',
+					/*0|1|...*/'',
+					/*css|dom|...*/'',
+					/*props|types|api|...*/'',
+					/*font-size|querySelector|...*/'',
+					/*count|values*/'',
+					/*px|em|...*/'',
+					/*...*/'',
+					/*...*/'',
+				];
+				
+				// Copy the column values from the template
+				for(var i = currentRowTemplate.length; i--;) {
+					row[i] = currentRowTemplate[i];
+				}
+				
+				// Add the value to the row
+				row[VALUE_COLUMN] = value;
+				
+				return row;
+			}
+
+		}
+		
     }
 
 
