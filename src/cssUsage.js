@@ -67,20 +67,20 @@ void function() {
         
         // this will contains the various datapoints we measure on css selector usage
         selectorUsages: {},
-		
-		// this will contain selectors and the properties they refer to
-		cssrules: {"@cssrule":null,"@inline":null}, /*
-		cssrules ~= {
-			"#id:hover .class": {
-				count: 10,
-				props: {
-					"background-color": 5,
-					"color": 4,
-					"opacity": 3,
-					"transform": 3
-				}
-			}
-		}*/
+        
+        // this will contain selectors and the properties they refer to
+        cssrules: {"@cssrule":null,"@inline":null}, /*
+        cssrules ~= {
+            "#id:hover .class": {
+                count: 10,
+                props: {
+                    "background-color": 5,
+                    "color": 4,
+                    "opacity": 3,
+                    "transform": 3
+                }
+            }
+        }*/
         
     }
 }();
@@ -95,9 +95,9 @@ void function() { "use strict";
         elementAnalyzers: [],
         parseStylesheets: parseStylesheets,
         walkOverDomElements: walkOverDomElements,
-		amountOfInlineStyles: 0,
-		amountOfSelectorsUnused: 0,
-		amountOfSelectors: 0,
+        amountOfInlineStyles: 0,
+        amountOfSelectorsUnused: 0,
+        amountOfSelectors: 0,
     }
 
     function parseStylesheets() {
@@ -201,11 +201,11 @@ void function() { "use strict";
      *
      */
     function runRuleAnalyzers(style, selector, type, isInline) {
-		if(isInline) {
-			CSSUsage.StyleWalker.amountOfInlineStyles++;
-		} else {
-			CSSUsage.StyleWalker.amountOfSelectors++;
-		}
+        if(isInline) {
+            CSSUsage.StyleWalker.amountOfInlineStyles++;
+        } else {
+            CSSUsage.StyleWalker.amountOfSelectors++;
+        }
         CSSUsage.StyleWalker.ruleAnalyzers.forEach(function(runAnalyzer) {
             runAnalyzer(style, selector, type, isInline);
         });
@@ -356,15 +356,15 @@ void function() {
             
             // If this is an inline style we know this will be applied once
             if (isInline == true) {
-				matchedElements.push(selector);
+                matchedElements.push(selector);
                 count += 1; 
             }
             
             // If there's a selector, we can see how many times it matches
             // If there is a pseudo style, clean it
             if (typeof selector == 'string') {
-				var matchedElementsNL = document.querySelectorAll(cleanSelectorText(selector))
-				matchedElements = [].slice.call(matchedElementsNL, 0);
+                var matchedElementsNL = document.querySelectorAll(cleanSelectorText(selector))
+                matchedElements = [].slice.call(matchedElementsNL, 0);
                 count += matchedElements.length;
             }
             
@@ -372,17 +372,17 @@ void function() {
         };
         
         if(isRuleUnsed()) {
-			CSSUsage.StyleWalker.amountOfSelectorsUnused++;
+            CSSUsage.StyleWalker.amountOfSelectorsUnused++;
         }
-		
-		// We need a generalized selector to collect some stats
-		var generalizedSelector1 = typeof(selector)=='string' ? "@cssrule" : '@inline'; // TODO
-		var generalizedSelector2 = typeof(selector)=='string' ? generalizedSelectorOf(selector) : ("@inline:"+selector.tagName).replace(/^[@].*[@]/,'@'); // TODO
+        
+        // We need a generalized selector to collect some stats
+        var generalizedSelector1 = typeof(selector)=='string' ? "@cssrule" : '@inline'; // TODO
+        var generalizedSelector2 = typeof(selector)=='string' ? generalizedSelectorOf(selector) : ("@inline:"+selector.tagName).replace(/^[@].*[@]/,'@'); // TODO
         var generalizedSelectorData1 = CSSUsageResults.cssrules[generalizedSelector1] || (CSSUsageResults.cssrules[generalizedSelector1] = {count:0,props:{}});
         var generalizedSelectorData2 = CSSUsageResults.cssrules[generalizedSelector2] || (CSSUsageResults.cssrules[generalizedSelector2] = {count:0,props:{}});
-		generalizedSelectorData1.count++;
-		generalizedSelectorData2.count++;
-		
+        generalizedSelectorData1.count++;
+        generalizedSelectorData2.count++;
+        
         // For each property declaration in this rule, we collect some stats
         for (var i = style.length; i--;) {
 
@@ -398,51 +398,51 @@ void function() {
             if (isValueInvalid() || isPropertyUndefined()) {
                 continue;
             }
-			
-			// log the usage per selector
-			generalizedSelectorData1.props[normalizedKey] = (generalizedSelectorData1.props[normalizedKey]|0) + 1;
-			generalizedSelectorData2.props[normalizedKey] = (generalizedSelectorData2.props[normalizedKey]|0) + 1;
             
-			// if we may increment some counts due to this declaration
-			if(count > 0) {
-				
-				// instanciate or fetch the property metadata
-				var propObject = CSSUsageResults.props[normalizedKey];
-				if (!propObject) {
-					propObject = CSSUsageResults.props[normalizedKey] = {
-						count: 0,
-						values: {}
-					};
-				}
-				
-				// update the occurence counts of the property and value
-				matchedElements.forEach(element => {
-					
-					// check what the elements already contributed for this property
-					var knownValues = element['CSSUsage:'+normalizedKey] || (element['CSSUsage:'+normalizedKey] = []);
-					
-					// increment the amount of affected elements which we didn't count yet
-					if(knownValues.length == 0) { propObject.count += 1; }
+            // log the usage per selector
+            generalizedSelectorData1.props[normalizedKey] = (generalizedSelectorData1.props[normalizedKey]|0) + 1;
+            generalizedSelectorData2.props[normalizedKey] = (generalizedSelectorData2.props[normalizedKey]|0) + 1;
+            
+            // if we may increment some counts due to this declaration
+            if(count > 0) {
+                
+                // instanciate or fetch the property metadata
+                var propObject = CSSUsageResults.props[normalizedKey];
+                if (!propObject) {
+                    propObject = CSSUsageResults.props[normalizedKey] = {
+                        count: 0,
+                        values: {}
+                    };
+                }
+                
+                // update the occurence counts of the property and value
+                matchedElements.forEach(element => {
+                    
+                    // check what the elements already contributed for this property
+                    var knownValues = element['CSSUsage:'+normalizedKey] || (element['CSSUsage:'+normalizedKey] = []);
+                    
+                    // increment the amount of affected elements which we didn't count yet
+                    if(knownValues.length == 0) { propObject.count += 1; }
 
-					// add newly found values too
-					var values = CSSUsage.CSSValues.createValueArray(styleValue);
-					values.forEach(function (value) {
-						value = CSSUsage.CSSValues.parseValues(value);
+                    // add newly found values too
+                    var values = CSSUsage.CSSValues.createValueArray(styleValue);
+                    values.forEach(function (value) {
+                        value = CSSUsage.CSSValues.parseValues(value);
 
-						if (value === " " || value === "") {
-							return;
-						}
-						
-						if(knownValues.indexOf(value) >= 0) { return; }
-						propObject.values[value] = (propObject.values[value]|0) + 1;
-						knownValues.push(value);
+                        if (value === " " || value === "") {
+                            return;
+                        }
+                        
+                        if(knownValues.indexOf(value) >= 0) { return; }
+                        propObject.values[value] = (propObject.values[value]|0) + 1;
+                        knownValues.push(value);
 
-					});
-					
-				});
-				
-			}
-			
+                    });
+                    
+                });
+                
+            }
+            
         }
     }
 
@@ -496,46 +496,46 @@ void function() {
             return text.replace(/([*a-zA-Z]?):(?:hover|active|focus|before|after)|::(?:before|after)/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([*a-zA-Z]?)<</g,'$1');
         }
     }
-	
-	function generalizedSelectorOf(value) {
-		
-		// Trim
-		value = value.trim();
-		
-		// Remove (...)
-		if (value.indexOf("(") != -1) {
+    
+    function generalizedSelectorOf(value) {
+        
+        // Trim
+        value = value.trim();
+        
+        // Remove (...)
+        if (value.indexOf("(") != -1) {
             value = value.replace(/[(]([^()]+|[(]([^()]+)[)])+[)]/g, "");
         }
-		
-		// Remove whitespace
-		if (value.indexOf("(") != -1) {
+        
+        // Remove whitespace
+        if (value.indexOf("(") != -1) {
             value = value.replace(/\s+/g, " ");
         }
-		
-		// Simplify [att]
-		if (value.indexOf("[") != -1) {
+        
+        // Simplify [att]
+        if (value.indexOf("[") != -1) {
             value = value.replace(/\[[^\[\]]+\]/g, "[att]");
         }
-		
-		// Simplify .class
-		if (value.indexOf(".") != -1) {
+        
+        // Simplify .class
+        if (value.indexOf(".") != -1) {
             value = value.replace(/[.][a-zA-Z][-_a-zA-Z0-9]*/g, ".class");
         }
-		
-		// Simplify #id
-		if (value.indexOf("#") != -1) {
+        
+        // Simplify #id
+        if (value.indexOf("#") != -1) {
             value = value.replace(/[#][a-zA-Z][-_a-zA-Z0-9]*/g, "#id");
         }
-		
-		// Normalize combinators
-		value = value.replace(/[ ]*([>|+|~])[ ]*/g,' $1 ');
-		
-		// Clean multitple selectors
-		value = value.replace(/,.*/,'');
+        
+        // Normalize combinators
+        value = value.replace(/[ ]*([>|+|~])[ ]*/g,' $1 ');
+        
+        // Clean multitple selectors
+        value = value.replace(/,.*/,'');
 
-		return value.trim();
+        return value.trim();
 
-	}
+    }
 
 }();
 
@@ -708,29 +708,29 @@ void function() {
             return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
             
         };
-		
-		var detectedModernizerUsages = function(domClasses) {
-			
-			var ModernizerUsages = {count:0,values:{}};
-			var trackedClasses = ["js","ambientlight","applicationcache","audio","batteryapi","blobconstructor","canvas","canvastext","contenteditable","contextmenu","cookies","cors","cryptography","customprotocolhandler","customevent","dart","dataview","emoji","eventlistener","exiforientation","flash","fullscreen","gamepads","geolocation","hashchange","hiddenscroll","history","htmlimports","ie8compat","indexeddb","indexeddbblob","input","search","inputtypes","intl","json","olreversed","mathml","notification","pagevisibility","performance","pointerevents","pointerlock","postmessage","proximity","queryselector","quotamanagement","requestanimationframe","serviceworker","svg","templatestrings","touchevents","typedarrays","unicoderange","unicode","userdata","vibrate","video","vml","webintents","animation","webgl","websockets","xdomainrequest","adownload","audioloop","audiopreload","webaudio","lowbattery","canvasblending","todataurljpeg,todataurlpng,todataurlwebp","canvaswinding","getrandomvalues","cssall","cssanimations","appearance","backdropfilter","backgroundblendmode","backgroundcliptext","bgpositionshorthand","bgpositionxy","bgrepeatspace,bgrepeatround","backgroundsize","bgsizecover","borderimage","borderradius","boxshadow","boxsizing","csscalc","checked","csschunit","csscolumns","cubicbezierrange","display-runin","displaytable","ellipsis","cssescape","cssexunit","cssfilters","flexbox","flexboxlegacy","flexboxtweener","flexwrap","fontface","generatedcontent","cssgradients","hsla","csshyphens,softhyphens,softhyphensfind","cssinvalid","lastchild","cssmask","mediaqueries","multiplebgs","nthchild","objectfit","opacity","overflowscrolling","csspointerevents","csspositionsticky","csspseudoanimations","csspseudotransitions","cssreflections","regions","cssremunit","cssresize","rgba","cssscrollbar","shapes","siblinggeneral","subpixelfont","supports","target","textalignlast","textshadow","csstransforms","csstransforms3d","preserve3d","csstransitions","userselect","cssvalid","cssvhunit","cssvmaxunit","cssvminunit","cssvwunit","willchange","wrapflow","classlist","createelementattrs,createelement-attrs","dataset","documentfragment","hidden","microdata","mutationobserver","bdi","datalistelem","details","outputelem","picture","progressbar,meter","ruby","template","time","texttrackapi,track","unknownelements","es5array","es5date","es5function","es5object","es5","strictmode","es5string","es5syntax","es5undefined","es6array","contains","generators","es6math","es6number","es6object","promises","es6string","devicemotion,deviceorientation","oninput","filereader","filesystem","capture","fileinput","directory","formattribute","localizednumber","placeholder","requestautocomplete","formvalidation","sandbox","seamless","srcdoc","apng","jpeg2000","jpegxr","sizes","srcset","webpalpha","webpanimation","webplossless,webp-lossless","webp","inputformaction","inputformenctype","inputformmethod","inputformtarget","beacon","lowbandwidth","eventsource","fetch","xhrresponsetypearraybuffer","xhrresponsetypeblob","xhrresponsetypedocument","xhrresponsetypejson","xhrresponsetypetext","xhrresponsetype","xhr2","scriptasync","scriptdefer","speechrecognition","speechsynthesis","localstorage","sessionstorage","websqldatabase","stylescoped","svgasimg","svgclippaths","svgfilters","svgforeignobject","inlinesvg","smil","textareamaxlength","bloburls","datauri","urlparser","videoautoplay","videoloop","videopreload","webglextensions","datachannel","getusermedia","peerconnection","websocketsbinary","atob-btoa","framed","matchmedia","blobworkers","dataworkers","sharedworkers","transferables","webworkers"];
+        
+        var detectedModernizerUsages = function(domClasses) {
+            
+            var ModernizerUsages = {count:0,values:{}};
+            var trackedClasses = ["js","ambientlight","applicationcache","audio","batteryapi","blobconstructor","canvas","canvastext","contenteditable","contextmenu","cookies","cors","cryptography","customprotocolhandler","customevent","dart","dataview","emoji","eventlistener","exiforientation","flash","fullscreen","gamepads","geolocation","hashchange","hiddenscroll","history","htmlimports","ie8compat","indexeddb","indexeddbblob","input","search","inputtypes","intl","json","olreversed","mathml","notification","pagevisibility","performance","pointerevents","pointerlock","postmessage","proximity","queryselector","quotamanagement","requestanimationframe","serviceworker","svg","templatestrings","touchevents","typedarrays","unicoderange","unicode","userdata","vibrate","video","vml","webintents","animation","webgl","websockets","xdomainrequest","adownload","audioloop","audiopreload","webaudio","lowbattery","canvasblending","todataurljpeg,todataurlpng,todataurlwebp","canvaswinding","getrandomvalues","cssall","cssanimations","appearance","backdropfilter","backgroundblendmode","backgroundcliptext","bgpositionshorthand","bgpositionxy","bgrepeatspace,bgrepeatround","backgroundsize","bgsizecover","borderimage","borderradius","boxshadow","boxsizing","csscalc","checked","csschunit","csscolumns","cubicbezierrange","display-runin","displaytable","ellipsis","cssescape","cssexunit","cssfilters","flexbox","flexboxlegacy","flexboxtweener","flexwrap","fontface","generatedcontent","cssgradients","hsla","csshyphens,softhyphens,softhyphensfind","cssinvalid","lastchild","cssmask","mediaqueries","multiplebgs","nthchild","objectfit","opacity","overflowscrolling","csspointerevents","csspositionsticky","csspseudoanimations","csspseudotransitions","cssreflections","regions","cssremunit","cssresize","rgba","cssscrollbar","shapes","siblinggeneral","subpixelfont","supports","target","textalignlast","textshadow","csstransforms","csstransforms3d","preserve3d","csstransitions","userselect","cssvalid","cssvhunit","cssvmaxunit","cssvminunit","cssvwunit","willchange","wrapflow","classlist","createelementattrs,createelement-attrs","dataset","documentfragment","hidden","microdata","mutationobserver","bdi","datalistelem","details","outputelem","picture","progressbar,meter","ruby","template","time","texttrackapi,track","unknownelements","es5array","es5date","es5function","es5object","es5","strictmode","es5string","es5syntax","es5undefined","es6array","contains","generators","es6math","es6number","es6object","promises","es6string","devicemotion,deviceorientation","oninput","filereader","filesystem","capture","fileinput","directory","formattribute","localizednumber","placeholder","requestautocomplete","formvalidation","sandbox","seamless","srcdoc","apng","jpeg2000","jpegxr","sizes","srcset","webpalpha","webpanimation","webplossless,webp-lossless","webp","inputformaction","inputformenctype","inputformmethod","inputformtarget","beacon","lowbandwidth","eventsource","fetch","xhrresponsetypearraybuffer","xhrresponsetypeblob","xhrresponsetypedocument","xhrresponsetypejson","xhrresponsetypetext","xhrresponsetype","xhr2","scriptasync","scriptdefer","speechrecognition","speechsynthesis","localstorage","sessionstorage","websqldatabase","stylescoped","svgasimg","svgclippaths","svgfilters","svgforeignobject","inlinesvg","smil","textareamaxlength","bloburls","datauri","urlparser","videoautoplay","videoloop","videopreload","webglextensions","datachannel","getusermedia","peerconnection","websocketsbinary","atob-btoa","framed","matchmedia","blobworkers","dataworkers","sharedworkers","transferables","webworkers"];
             trackedClasses.forEach(function(c) { var count = cssLonelyClassGates[c]; if(!count) return; ModernizerUsages.count += count; ModernizerUsages.values[c]=count; });
-			return ModernizerUsages;
-			
-		}
+            return ModernizerUsages;
+            
+        }
 
         //
         //
         //
         var results = {
-			
-			DOMElements: document.all.length,
-			SelectorsFound: CSSUsage.StyleWalker.amountOfSelectors,
-			InlineStylesFound: CSSUsage.StyleWalker.amountOfInlineStyles,
-			SelectorsUnused: CSSUsage.StyleWalker.amountOfSelectorsUnused,
-			
-			IdsUsed: domIdsArray.length,
-			IdsRecognized: Object.keys(cssIds).length,
-			IdsUsedRecognized: domIdsArray.filter(i => cssIds[i]).length,
+            
+            DOMElements: document.all.length,
+            SelectorsFound: CSSUsage.StyleWalker.amountOfSelectors,
+            InlineStylesFound: CSSUsage.StyleWalker.amountOfInlineStyles,
+            SelectorsUnused: CSSUsage.StyleWalker.amountOfSelectorsUnused,
+            
+            IdsUsed: domIdsArray.length,
+            IdsRecognized: Object.keys(cssIds).length,
+            IdsUsedRecognized: domIdsArray.filter(i => cssIds[i]).length,
             
             ClassesUsed: domClassesArray.length,
             ClassesRecognized: Object.keys(cssClasses).length,
@@ -741,9 +741,9 @@ void function() {
             
             ClearfixRecognized: detectedClearfixUsages(cssClasses),
             VisibilityRecognized: detectedVisibilityUsages(cssClasses),
- 			
-			Modernizer: !!window.Modernizer,
-			ModernizerUsages: detectedModernizerUsages(domClasses),
+            
+            Modernizer: !!window.Modernizer,
+            ModernizerUsages: detectedModernizerUsages(domClasses),
            
             Bootstrap: !!((window.jQuery||window.$) && (window.jQuery||window.$).fn.modal)|0,
             
