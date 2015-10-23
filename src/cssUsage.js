@@ -10,17 +10,19 @@ void function() {
 // Prepare the whole instrumentation world
 //
 void function() {
-	
-	var ua = navigator.userAgent;
-	window.INSTRUMENTATION_RESULTS = {
-		UA: ua.indexOf('Edge')>=0 ? 'EdgeHTML' :ua.indexOf('Chrome')>=0 ? 'Chromium' : 'Gecko',
-		URL: location.href,
-		TIMESTAMP: Date.now(),
-		css: {},
-		dom: {}
-	};
-	window.INSTRUMENTATION_RESULTS_TSV = [];
-	
+    
+    var ua = navigator.userAgent;
+    var uaName = ua.indexOf('Edge')>=0 ? 'EDGE' :ua.indexOf('Chrome')>=0 ? 'CHROME' : 'FIREFOX';
+    window.INSTRUMENTATION_RESULTS = {
+        UA: uaName,
+        UASTRING: ua,
+        URL: location.href,
+        TIMESTAMP: Date.now(),
+        css: {},
+        dom: {}
+    };
+    window.INSTRUMENTATION_RESULTS_TSV = [];
+    
 }();
 
 //
@@ -29,43 +31,57 @@ void function() {
 void function() {
     window.CSSUsage = {};
     window.CSSUsageResults = {
-		
-		// this will contains the usage stats of various at-rules and rules
+        
+        // this will contain the usage stats of various at-rules and rules
         types: [ 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, ], /* 
-		types ~= {
-			"unknown":0,   //0
-			"style":0,     //1
-			"charset": 0,  //2
-			"import":0,    //3
-			"media":0,     //4
-			"font-face":0, //5
-			"page":0,      //6
-			"keyframes":0, //7 This is the @keyframe at rule
-			"keyframe":0,  //8 This is the individual 0%, or from/to
-			"reserved9":0, //9
-			"namespace":0, //10
-			"reserved11":0,//11
-			"supports":0,  //12
-			"reserved13":0,//13
-			"reserved14":0,//14
-			"viewport":0,  //15
-		}*/
-		
-		// this will contains the usage stats of various css properties and values
+        types ~= {
+            "unknown":0,   //0
+            "style":0,     //1
+            "charset": 0,  //2
+            "import":0,    //3
+            "media":0,     //4
+            "font-face":0, //5
+            "page":0,      //6
+            "keyframes":0, //7 This is the @keyframe at rule
+            "keyframe":0,  //8 This is the individual 0%, or from/to
+            "reserved9":0, //9
+            "namespace":0, //10
+            "reserved11":0,//11
+            "supports":0,  //12
+            "reserved13":0,//13
+            "reserved14":0,//14
+            "viewport":0,  //15
+        }*/
+        
+        // this will contain the usage stats of various css properties and values
         props: Object.create(null), /*
-		props ~= {
-			"background-color": {
+        props ~= {
+            "background-color": {
+                count: 10,
+                values: {
+                    "color": 9,
+                    "inherit": 1
+                }
+            }
+        }*/
+        
+        // this will contains the various datapoints we measure on css selector usage
+        selectorUsages: {},
+		
+		// this will contain selectors and the properties they refer to
+		cssrules: {"@cssrule":null,"@inline":null}, /*
+		cssrules ~= {
+			"#id:hover .class": {
 				count: 10,
-				values: {
-					"color": 9,
-					"inherit": 1
+				props: {
+					"background-color": 5,
+					"color": 4,
+					"opacity": 3,
+					"transform": 3
 				}
 			}
 		}*/
-		
-		// this will contains the various datapoints we measure on css selector usage
-		selectorUsages: {},
-		
+        
     }
 }();
 
@@ -76,9 +92,12 @@ void function() { "use strict";
 
     CSSUsage.StyleWalker = {
         ruleAnalyzers: [],
-		elementAnalyzers: [],
+        elementAnalyzers: [],
         parseStylesheets: parseStylesheets,
         walkOverDomElements: walkOverDomElements,
+		amountOfInlineStyles: 0,
+		amountOfSelectorsUnused: 0,
+		amountOfSelectors: 0,
     }
 
     function parseStylesheets() {
@@ -121,7 +140,7 @@ void function() { "use strict";
                 // to keyframes do not parse @keyframe rules
                 // TODO: https://github.com/gregwhitworth/css-usage/issues/3
                 if(rule.type != 7) {
-                    CSSUsageResults.types[rule.type]++; // Increase for rule type
+                    CSSUsageResults.types[rule.type|0]++; // Increase for rule type
 
                     // Some CssRules have nested rules, so we need to
                     // test those as well, this will start the recursion
@@ -129,10 +148,10 @@ void function() { "use strict";
                         walkOverCssRules(rule.cssRules, styleSheet);
                     }
 
-					// Some CssRules have style we can ananlyze
-					if(rule.style) {
-						runRuleAnalyzers(rule.style, rule.selectorText, rule.type);
-					}
+                    // Some CssRules have style we can ananlyze
+                    if(rule.style) {
+                        runRuleAnalyzers(rule.style, rule.selectorText||{tagName:"@RULE"+rule.type}, rule.type);
+                    }
                 }
 
                 rulesProcessed++;
@@ -155,14 +174,14 @@ void function() { "use strict";
     function walkOverDomElements(obj, index, depth) {
         obj = obj || document.documentElement; index = index|0; depth = depth|0;
 
-		var elements = [].slice.call(document.all,0);
-		for(var i=elements.length; i--;) { var element=elements[i];
-			runElementAnalyzers(element, index);
-			if (element.hasAttribute('style')) {
-				runRuleAnalyzers(element.style, null, 1, true);
-			}
-		}
-		/*runElementAnalyzers(obj, index, depth);
+        var elements = [].slice.call(document.all,0);
+        for(var i=elements.length; i--;) { var element=elements[i];
+            runElementAnalyzers(element, index);
+            if (element.hasAttribute('style')) {
+                runRuleAnalyzers(element.style, element, 1, true);
+            }
+        }
+        /*runElementAnalyzers(obj, index, depth);
         if (obj.style.cssText != "") {
             runRuleAnalyzers(obj.style, null, 1, true);
         }
@@ -182,11 +201,16 @@ void function() { "use strict";
      *
      */
     function runRuleAnalyzers(style, selector, type, isInline) {
+		if(isInline) {
+			CSSUsage.StyleWalker.amountOfInlineStyles++;
+		} else {
+			CSSUsage.StyleWalker.amountOfSelectors++;
+		}
         CSSUsage.StyleWalker.ruleAnalyzers.forEach(function(runAnalyzer) {
             runAnalyzer(style, selector, type, isInline);
         });
     }
-	
+    
     /*
      *
      */
@@ -206,7 +230,7 @@ void function() {
     CSSUsage.CSSValues = {
         createValueArray: createValueArray,
         parseValues: parseValues,
-		normalizeValue: normalizeValue
+        normalizeValue: normalizeValue
     };
 
     /*
@@ -243,22 +267,22 @@ void function() {
      * to only the aspects of the value we wish to keep
      */
     function parseValues(value) {
-		
+        
          // Map colors to colors (eg: white, blue, yellow)
-		 if (isKeywordColor(value)) {
+         if (isKeywordColor(value)) {
             return "color"; 
          }
-		 
-		 // Remove any digits eg: 55px -> px, 1.5 -> 0.0, 1 -> 0
+         
+         // Remove any digits eg: 55px -> px, 1.5 -> 0.0, 1 -> 0
          value = value.replace(/([+]|[-]|)(([0-9]+)([.][0-9]+|)|([.][0-9]+))([a-zA-Z%]+)/g, "$6"); 
          value = value.replace(/([+]|[-]|)([0-9]+)([.][0-9]+)/g, "0.0");
          value = value.replace(/([+]|[-]|)([.][0-9]+)/g, "0.0");
          value = value.replace(/([+]|[-]|)([0-9]+)/g, "0");
-		 
-		 // Remove quotes
-		 value = value.replace(/('|‘|’|")/g, "");
-		 return value;
-		 
+         
+         // Remove quotes
+         value = value.replace(/('|‘|’|")/g, "");
+         return value;
+         
     }
 
     //-----------------------------------------------------------------------------
@@ -319,77 +343,106 @@ void function() {
 void function() {
 
     CSSUsage.PropertyValuesAnalyzer = parseStyle;
-	CSSUsage.PropertyValuesAnalyzer.cleanSelectorText = cleanSelectorText;
+    CSSUsage.PropertyValuesAnalyzer.cleanSelectorText = cleanSelectorText;
 
     // This will loop over the styles declarations
-	// TODO: Come up with a better solution for parsing certain @rules
-	var defaultStyle = getComputedStyle(document.createElement('div'));
+    // TODO: Come up with a better solution for parsing certain @rules
+    var defaultStyle = getComputedStyle(document.createElement('div'));
     function parseStyle(style, selector, type, isInline) {
+        
+        // We want to filter rules that are not actually used
+        var count = 0, matchedElements = [];
+        var isRuleUnsed = () => {
+            
+            // If this is an inline style we know this will be applied once
+            if (isInline == true) {
+				matchedElements.push(selector);
+                count += 1; 
+            }
+            
+            // If there's a selector, we can see how many times it matches
+            // If there is a pseudo style, clean it
+            if (typeof selector == 'string') {
+				var matchedElementsNL = document.querySelectorAll(cleanSelectorText(selector))
+				matchedElements = [].slice.call(matchedElementsNL, 0);
+                count += matchedElements.length;
+            }
+            
+            return count == 0;
+        };
+        
+        if(isRuleUnsed()) {
+			CSSUsage.StyleWalker.amountOfSelectorsUnused++;
+        }
 		
-		// We want to filter rules that are not actually used
-		var count = 0;
-		var isRuleUnsed = () => {
-			
-			// If this is an inline style we know this will be applied once
-			if (isInline == true) {
-				count += 1; 
-			}
-			
-			// If there's a selector, we can see how many times it matches
-			// If there is a pseudo style, clean it
-			if (selector) {
-				count += document.querySelectorAll(cleanSelectorText(selector)).length;
-			}
-			
-			return count == 0;
-		};
+		// We need a generalized selector to collect some stats
+		var generalizedSelector1 = typeof(selector)=='string' ? "@cssrule" : '@inline'; // TODO
+		var generalizedSelector2 = typeof(selector)=='string' ? generalizedSelectorOf(selector) : ("@inline:"+selector.tagName).replace(/^[@].*[@]/,'@'); // TODO
+        var generalizedSelectorData1 = CSSUsageResults.cssrules[generalizedSelector1] || (CSSUsageResults.cssrules[generalizedSelector1] = {count:0,props:{}});
+        var generalizedSelectorData2 = CSSUsageResults.cssrules[generalizedSelector2] || (CSSUsageResults.cssrules[generalizedSelector2] = {count:0,props:{}});
+		generalizedSelectorData1.count++;
+		generalizedSelectorData2.count++;
 		
-		if(isRuleUnsed()) {
-			return;
-		}
-		
-		// For each property declaration in this rule, we collect some stats
+        // For each property declaration in this rule, we collect some stats
         for (var i = style.length; i--;) {
 
-			var key = style[i];
-			var normalizedKey = key.replace(/^--.*/,'--var');
-			var styleValue = style.getPropertyValue(key);
-			
+            var key = style[i];
+            var normalizedKey = key.replace(/^--.*/,'--var');
+            var styleValue = style.getPropertyValue(key);
+            
             // Only keep styles that were declared by the author
             // We need to make sure we're only checking string props
-			var isValueInvalid = () => (typeof styleValue !== 'string' && styleValue != "" && styleValue != undefined);
-			var isPropertyUndefined = () => (style.cssText.indexOf(key+':') == -1 && (styleValue=='initial' || styleValue==defaultStyle.getPropertyValue(key)));
-			
+            var isValueInvalid = () => (typeof styleValue !== 'string' && styleValue != "" && styleValue != undefined);
+            var isPropertyUndefined = () => (style.cssText.indexOf(key+':') == -1 && (styleValue=='initial' || styleValue==defaultStyle.getPropertyValue(key)));
+            
             if (isValueInvalid() || isPropertyUndefined()) {
                 continue;
             }
 			
-            // instanciate or fetch the property metadata
-            var propObject = CSSUsageResults.props[normalizedKey];
-            if (!propObject) {
-                propObject = CSSUsageResults.props[normalizedKey] = {
-                    name: normalizedKey,
-                    count: 0,
-                    type: type,
-                    values: {}
-                };
-            }
-
-            // increment the amount of affected elements
-            propObject.count += count;
-
-			// add newly found values too
-            var values = CSSUsage.CSSValues.createValueArray(styleValue);
-            values.forEach(function (value) {
-                value = CSSUsage.CSSValues.parseValues(value);
-
-                if (value === " " || value === "") {
-                    return;
-                }
+			// log the usage per selector
+			generalizedSelectorData1.props[normalizedKey] = (generalizedSelectorData1.props[normalizedKey]|0) + 1;
+			generalizedSelectorData2.props[normalizedKey] = (generalizedSelectorData2.props[normalizedKey]|0) + 1;
+            
+			// if we may increment some counts due to this declaration
+			if(count > 0) {
 				
-				propObject.values[value] = (propObject.values[value]|0) + count;
+				// instanciate or fetch the property metadata
+				var propObject = CSSUsageResults.props[normalizedKey];
+				if (!propObject) {
+					propObject = CSSUsageResults.props[normalizedKey] = {
+						count: 0,
+						values: {}
+					};
+				}
+				
+				// update the occurence counts of the property and value
+				matchedElements.forEach(element => {
+					
+					// check what the elements already contributed for this property
+					var knownValues = element['CSSUsage:'+normalizedKey] || (element['CSSUsage:'+normalizedKey] = []);
+					
+					// increment the amount of affected elements which we didn't count yet
+					if(knownValues.length == 0) { propObject.count += 1; }
 
-            });
+					// add newly found values too
+					var values = CSSUsage.CSSValues.createValueArray(styleValue);
+					values.forEach(function (value) {
+						value = CSSUsage.CSSValues.parseValues(value);
+
+						if (value === " " || value === "") {
+							return;
+						}
+						
+						if(knownValues.indexOf(value) >= 0) { return; }
+						propObject.values[value] = (propObject.values[value]|0) + 1;
+						knownValues.push(value);
+
+					});
+					
+				});
+				
+			}
+			
         }
     }
 
@@ -402,15 +455,15 @@ void function() {
      * to normalize those values to be able to do string comparisons
      */
     function normalizeKey(key) {
-		var cache = normalizeKey.cache || (normalizeKey.cache=Object.create(null));
-		var result, resultFromCache = cache[key];
-		if(resultFromCache) {
-			return resultFromCache;
-		} else {
-			result = key.replace(/([a-z])([A-Z])/g, "$1-$2").replace(/^ms-/,'-ms-');
-			result = result.toLowerCase();
-			switch(result) { case 'stylefloat': case 'cssfloat': return cache[key]='float'; default: return cache[key]=result; }
-		}
+        var cache = normalizeKey.cache || (normalizeKey.cache=Object.create(null));
+        var result, resultFromCache = cache[key];
+        if(resultFromCache) {
+            return resultFromCache;
+        } else {
+            result = key.replace(/([a-z])([A-Z])/g, "$1-$2").replace(/^ms-/,'-ms-');
+            result = result.toLowerCase();
+            switch(result) { case 'stylefloat': case 'cssfloat': return cache[key]='float'; default: return cache[key]=result; }
+        }
     }
 
     /*
@@ -437,11 +490,51 @@ void function() {
      * so we remove the pseudo selector from the selector text
      */
     function cleanSelectorText(text) {
-		if(text.indexOf(':') == -1) {
-			return text;
-		} else {
-			return text.replace(/([*a-zA-Z]?):(?:hover|active|focus|before|after)|::(?:before|after)/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([*a-zA-Z]?)<</g,'$1');
-		}
+        if(text.indexOf(':') == -1) {
+            return text;
+        } else {
+            return text.replace(/([*a-zA-Z]?):(?:hover|active|focus|before|after)|::(?:before|after)/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([*a-zA-Z]?)<</g,'$1');
+        }
+    }
+	
+	function generalizedSelectorOf(value) {
+		
+		// Trim
+		value = value.trim();
+		
+		// Remove (...)
+		if (value.indexOf("(") != -1) {
+            value = value.replace(/[(]([^()]+|[(]([^()]+)[)])+[)]/g, "");
+        }
+		
+		// Remove whitespace
+		if (value.indexOf("(") != -1) {
+            value = value.replace(/\s+/g, " ");
+        }
+		
+		// Simplify [att]
+		if (value.indexOf("[") != -1) {
+            value = value.replace(/\[[^\[\]]+\]/g, "[att]");
+        }
+		
+		// Simplify .class
+		if (value.indexOf(".") != -1) {
+            value = value.replace(/[.][a-zA-Z][-_a-zA-Z0-9]*/g, ".class");
+        }
+		
+		// Simplify #id
+		if (value.indexOf("#") != -1) {
+            value = value.replace(/[#][a-zA-Z][-_a-zA-Z0-9]*/g, "#id");
+        }
+		
+		// Normalize combinators
+		value = value.replace(/[ ]*([>|+|~])[ ]*/g,' $1 ');
+		
+		// Clean multitple selectors
+		value = value.replace(/,.*/,'');
+
+		return value.trim();
+
 	}
 
 }();
@@ -450,213 +543,226 @@ void function() {
 // extracts valuable informations about selectors in use
 //
 void function() {
-	
-	var domStats = { count: 0, maxDepth: 1 };
-	
-	var cssPseudos = {};
-	var domClasses = {};
-	var cssClasses = {};
-	var domIds = {};
-	var cssIds = {};
-	
-	var cssLonelyIdGates = {__proto__:null};
-	var cssLonelyClassGates = {__proto__:null};
-	var cssLonelyClassGatesMatches = [];
-	var cssLonelyIdGatesMatches = [];
-	
-	var ID_REGEXP = /[#][a-zA-Z][-_a-zA-Z0-9]*/g;
-	var ID_REGEXP1 = /[#][a-zA-Z][-_a-zA-Z0-9]*/;
-	var CLASS_REGEXP = /[.][a-zA-Z][-_a-zA-Z0-9]*/g;
-	var CLASS_REGEXP1 = /[.][a-zA-Z][-_a-zA-Z0-9]*/;
-	var PSEUDO_REGEXP = /[:][a-zA-Z][-_a-zA-Z0-9]*/g;
-	var GATEID_REGEXP = /^\s*[#][a-zA-Z][-_a-zA-Z0-9]*([.][a-zA-Z][-_a-zA-Z0-9]*|[:][a-zA-Z][-_a-zA-Z0-9]*)*\s+[^>+{, ][^{,]+$/;
-	var GATECLASS_REGEXP = /^\s*[.][a-zA-Z][-_a-zA-Z0-9]*([:][a-zA-Z][-_a-zA-Z0-9]*)*\s+[^>+{, ][^{,]+$/;
-	function extractFeature(feature, selector, counters) {
-		var instances = (selector.match(feature)||[]).map(function(s) { return s.substr(1) });
-		instances.forEach((instance) => {
-			counters[instance] = (counters[instance]|0) + 1;
-		});
-	}
-	
-	CSSUsage.SelectorAnalyzer = function parseSelector(style, selectorsText) {
-		if(!selectorsText) return;
-			
-		var selectors = selectorsText.split(',');
-		for(var i = selectors.length; i--;) { var selector = selectors[i];
-			
-			// extract all features from the selectors
-			extractFeature(ID_REGEXP, selector, cssIds);
-			extractFeature(CLASS_REGEXP, selector, cssClasses);
-			extractFeature(PSEUDO_REGEXP, selector, cssPseudos);
-			
-			// detect specific selector patterns we're interested in
-			if(GATEID_REGEXP.test(selector)) {
-				cssLonelyIdGatesMatches.push(selector);
-				extractFeature(ID_REGEXP1, selector, cssLonelyIdGates);
-			}
-			if(GATECLASS_REGEXP.test(selector)) {
-				cssLonelyClassGatesMatches.push(selector);
-				extractFeature(CLASS_REGEXP1, selector, cssLonelyClassGates);
-			}
-		}
-		
-	}
-	
-	CSSUsage.DOMClassAnalyzer = function(element) {
-		
-		// collect classes used in the wild
-		if(element.className) {
-			var elementClasses = [].slice.call(element.classList,0);
-			elementClasses.forEach(function(c) {
-				domClasses[c] = (domClasses[c]|0) + 1;
-			});
-		}
-		
-		// collect ids used in the wild
-		if(element.id) {
-			domIds[element.id] = (domIds[element.id]|0) + 1;
-		}
-		
-	}
-	
-	CSSUsage.SelectorAnalyzer.finalize = function() {
-		
-		var domClassesArray = Object.keys(domClasses);
-		var cssClassesArray = Object.keys(cssClasses);
-		var domIdsArray = Object.keys(domIds);
-		var cssIdsArray = Object.keys(cssIds);
+    
+    var domStats = { count: 0, maxDepth: 1 };
+    
+    var cssPseudos = {};
+    var domClasses = {};
+    var cssClasses = {};
+    var domIds = {};
+    var cssIds = {};
+    
+    var cssLonelyIdGates = {__proto__:null};
+    var cssLonelyClassGates = {__proto__:null};
+    var cssLonelyClassGatesMatches = [];
+    var cssLonelyIdGatesMatches = [];
+    
+    var ID_REGEXP = /[#][a-zA-Z][-_a-zA-Z0-9]*/g;
+    var ID_REGEXP1 = /[#][a-zA-Z][-_a-zA-Z0-9]*/;
+    var CLASS_REGEXP = /[.][a-zA-Z][-_a-zA-Z0-9]*/g;
+    var CLASS_REGEXP1 = /[.][a-zA-Z][-_a-zA-Z0-9]*/;
+    var PSEUDO_REGEXP = /[:][a-zA-Z][-_a-zA-Z0-9]*/g;
+    var GATEID_REGEXP = /^\s*[#][a-zA-Z][-_a-zA-Z0-9]*([.][a-zA-Z][-_a-zA-Z0-9]*|[:][a-zA-Z][-_a-zA-Z0-9]*)*\s+[^>+{, ][^{,]+$/;
+    var GATECLASS_REGEXP = /^\s*[.][a-zA-Z][-_a-zA-Z0-9]*([:][a-zA-Z][-_a-zA-Z0-9]*)*\s+[^>+{, ][^{,]+$/;
+    function extractFeature(feature, selector, counters) {
+        var instances = (selector.match(feature)||[]).map(function(s) { return s.substr(1) });
+        instances.forEach((instance) => {
+            counters[instance] = (counters[instance]|0) + 1;
+        });
+    }
+    
+    CSSUsage.SelectorAnalyzer = function parseSelector(style, selectorsText) {
+        if(typeof selectorsText != 'string') return;
+            
+        var selectors = selectorsText.split(',');
+        for(var i = selectors.length; i--;) { var selector = selectors[i];
+            
+            // extract all features from the selectors
+            extractFeature(ID_REGEXP, selector, cssIds);
+            extractFeature(CLASS_REGEXP, selector, cssClasses);
+            extractFeature(PSEUDO_REGEXP, selector, cssPseudos);
+            
+            // detect specific selector patterns we're interested in
+            if(GATEID_REGEXP.test(selector)) {
+                cssLonelyIdGatesMatches.push(selector);
+                extractFeature(ID_REGEXP1, selector, cssLonelyIdGates);
+            }
+            if(GATECLASS_REGEXP.test(selector)) {
+                cssLonelyClassGatesMatches.push(selector);
+                extractFeature(CLASS_REGEXP1, selector, cssLonelyClassGates);
+            }
+        }
+        
+    }
+    
+    CSSUsage.DOMClassAnalyzer = function(element) {
+        
+        // collect classes used in the wild
+        if(element.className) {
+            var elementClasses = [].slice.call(element.classList,0);
+            elementClasses.forEach(function(c) {
+                domClasses[c] = (domClasses[c]|0) + 1;
+            });
+        }
+        
+        // collect ids used in the wild
+        if(element.id) {
+            domIds[element.id] = (domIds[element.id]|0) + 1;
+        }
+        
+    }
+    
+    CSSUsage.SelectorAnalyzer.finalize = function() {
+        
+        var domClassesArray = Object.keys(domClasses);
+        var cssClassesArray = Object.keys(cssClasses);
+        var domIdsArray = Object.keys(domIds);
+        var cssIdsArray = Object.keys(cssIds);
 
-		var cssUniqueLonelyClassGatesArray = Object.keys(cssLonelyClassGates);
-		var cssUniqueLonelyClassGatesUsedArray = cssUniqueLonelyClassGatesArray.filter((c) => domClasses[c]);
-		var cssUniqueLonelyClassGatesUsedWorthArray = cssUniqueLonelyClassGatesUsedArray.filter((c)=>(cssLonelyClassGates[c]>9));
-		console.log(cssLonelyClassGates);
-		console.log(cssUniqueLonelyClassGatesUsedWorthArray);
+        var cssUniqueLonelyClassGatesArray = Object.keys(cssLonelyClassGates);
+        var cssUniqueLonelyClassGatesUsedArray = cssUniqueLonelyClassGatesArray.filter((c) => domClasses[c]);
+        var cssUniqueLonelyClassGatesUsedWorthArray = cssUniqueLonelyClassGatesUsedArray.filter((c)=>(cssLonelyClassGates[c]>9));
+        console.log(cssLonelyClassGates);
+        console.log(cssUniqueLonelyClassGatesUsedWorthArray);
 
-		var cssUniqueLonelyIdGatesArray = Object.keys(cssLonelyIdGates);
-		var cssUniqueLonelyIdGatesUsedArray = cssUniqueLonelyIdGatesArray.filter((c) => domIds[c]);
-		var cssUniqueLonelyIdGatesUsedWorthArray = cssUniqueLonelyIdGatesUsedArray.filter((c)=>(cssLonelyIdGates[c]>9));
-		console.log(cssLonelyIdGates);
-		console.log(cssUniqueLonelyIdGatesUsedWorthArray);
+        var cssUniqueLonelyIdGatesArray = Object.keys(cssLonelyIdGates);
+        var cssUniqueLonelyIdGatesUsedArray = cssUniqueLonelyIdGatesArray.filter((c) => domIds[c]);
+        var cssUniqueLonelyIdGatesUsedWorthArray = cssUniqueLonelyIdGatesUsedArray.filter((c)=>(cssLonelyIdGates[c]>9));
+        console.log(cssLonelyIdGates);
+        console.log(cssUniqueLonelyIdGatesUsedWorthArray);
+        
+        //
+        //
+        //
+        var detectedClearfixUsages = function(domClasses) {
+            
+            var trackedClasses = [
+                'clearfix','clear',
+            ];
+            
+            return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
+            
+        };
+        
+        var detectedVisibilityUsages = function(domClasses) {
+            
+            var trackedClasses = [
+                'show', 'hide', 'visible', 'hidden', 
+            ];
+            
+            return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
+            
+        };
+        
+        //
+        //
+        //
+        var detectedBootstrapGridUsages = function(domClasses) {
+            
+            var trackedClasses = [];
+            
+            var sizes = ['xs','sm','md','lg'];
+            for(var i = sizes.length; i--;) { var size = sizes[i];
+                for(var j = 12+1; --j;) {
+                    trackedClasses.push('col-'+size+'-'+j);
+                    for(var k = 12+1; --k;) {
+                        trackedClasses.push('col-'+size+'-'+j+'-offset-'+k);
+                        trackedClasses.push('col-'+size+'-'+j+'-push-'+k);
+                        trackedClasses.push('col-'+size+'-'+j+'-pull-'+k);
+                    }
+                }
+            }
+            
+            return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
+            
+        };
+        
+        var detectedBootstrapFormUsages = function(domClasses) {
+            
+            var trackedClasses = [
+                'form-group', 'form-group-xs', 'form-group-sm', 'form-group-md', 'form-group-lg',
+                'form-control', 'form-horizontal', 'form-inline',
+                'btn','btn-primary','btn-secondary','btn-success','btn-warning','btn-danger','btn-error'
+            ];
+            
+            return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
+            
+        };
+        
+        var detectedBootstrapAlertUsages = function(domClasses) {
+            
+            var trackedClasses = [
+                'alert','alert-primary','alert-secondary','alert-success','alert-warning','alert-danger','alert-error'
+            ];
+            
+            return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
+            
+        };
+        
+        var detectedBootstrapFloatUsages = function(domClasses) {
+            
+            var trackedClasses = [
+                'pull-left','pull-right',
+            ];
+            
+            return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
+            
+        };
 		
-		//
-		//
-		//
-		var detectedClearfixUsages = function(domClasses) {
+		var detectedModernizerUsages = function(domClasses) {
 			
-			var trackedClasses = [
-				'clearfix','clear',
-			];
+			var ModernizerUsages = {count:0,values:{}};
+			var trackedClasses = ["js","ambientlight","applicationcache","audio","batteryapi","blobconstructor","canvas","canvastext","contenteditable","contextmenu","cookies","cors","cryptography","customprotocolhandler","customevent","dart","dataview","emoji","eventlistener","exiforientation","flash","fullscreen","gamepads","geolocation","hashchange","hiddenscroll","history","htmlimports","ie8compat","indexeddb","indexeddbblob","input","search","inputtypes","intl","json","olreversed","mathml","notification","pagevisibility","performance","pointerevents","pointerlock","postmessage","proximity","queryselector","quotamanagement","requestanimationframe","serviceworker","svg","templatestrings","touchevents","typedarrays","unicoderange","unicode","userdata","vibrate","video","vml","webintents","animation","webgl","websockets","xdomainrequest","adownload","audioloop","audiopreload","webaudio","lowbattery","canvasblending","todataurljpeg,todataurlpng,todataurlwebp","canvaswinding","getrandomvalues","cssall","cssanimations","appearance","backdropfilter","backgroundblendmode","backgroundcliptext","bgpositionshorthand","bgpositionxy","bgrepeatspace,bgrepeatround","backgroundsize","bgsizecover","borderimage","borderradius","boxshadow","boxsizing","csscalc","checked","csschunit","csscolumns","cubicbezierrange","display-runin","displaytable","ellipsis","cssescape","cssexunit","cssfilters","flexbox","flexboxlegacy","flexboxtweener","flexwrap","fontface","generatedcontent","cssgradients","hsla","csshyphens,softhyphens,softhyphensfind","cssinvalid","lastchild","cssmask","mediaqueries","multiplebgs","nthchild","objectfit","opacity","overflowscrolling","csspointerevents","csspositionsticky","csspseudoanimations","csspseudotransitions","cssreflections","regions","cssremunit","cssresize","rgba","cssscrollbar","shapes","siblinggeneral","subpixelfont","supports","target","textalignlast","textshadow","csstransforms","csstransforms3d","preserve3d","csstransitions","userselect","cssvalid","cssvhunit","cssvmaxunit","cssvminunit","cssvwunit","willchange","wrapflow","classlist","createelementattrs,createelement-attrs","dataset","documentfragment","hidden","microdata","mutationobserver","bdi","datalistelem","details","outputelem","picture","progressbar,meter","ruby","template","time","texttrackapi,track","unknownelements","es5array","es5date","es5function","es5object","es5","strictmode","es5string","es5syntax","es5undefined","es6array","contains","generators","es6math","es6number","es6object","promises","es6string","devicemotion,deviceorientation","oninput","filereader","filesystem","capture","fileinput","directory","formattribute","localizednumber","placeholder","requestautocomplete","formvalidation","sandbox","seamless","srcdoc","apng","jpeg2000","jpegxr","sizes","srcset","webpalpha","webpanimation","webplossless,webp-lossless","webp","inputformaction","inputformenctype","inputformmethod","inputformtarget","beacon","lowbandwidth","eventsource","fetch","xhrresponsetypearraybuffer","xhrresponsetypeblob","xhrresponsetypedocument","xhrresponsetypejson","xhrresponsetypetext","xhrresponsetype","xhr2","scriptasync","scriptdefer","speechrecognition","speechsynthesis","localstorage","sessionstorage","websqldatabase","stylescoped","svgasimg","svgclippaths","svgfilters","svgforeignobject","inlinesvg","smil","textareamaxlength","bloburls","datauri","urlparser","videoautoplay","videoloop","videopreload","webglextensions","datachannel","getusermedia","peerconnection","websocketsbinary","atob-btoa","framed","matchmedia","blobworkers","dataworkers","sharedworkers","transferables","webworkers"];
+            trackedClasses.forEach(function(c) { var count = cssLonelyClassGates[c]; if(!count) return; ModernizerUsages.count += count; ModernizerUsages.values[c]=count; });
+			return ModernizerUsages;
 			
-			return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
-			
-		};
-		
-		var detectedVisibilityUsages = function(domClasses) {
-			
-			var trackedClasses = [
-				'show', 'hide', 'visible', 'hidden', 
-			];
-			
-			return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
-			
-		};
-		
-		//
-		//
-		//
-		var detectedBootstrapGridUsages = function(domClasses) {
-			
-			var trackedClasses = [];
-			
-			var sizes = ['xs','sm','md','lg'];
-			for(var i = sizes.length; i--;) { var size = sizes[i];
-				for(var j = 12+1; --j;) {
-					trackedClasses.push('col-'+size+'-'+j);
-					for(var k = 12+1; --k;) {
-						trackedClasses.push('col-'+size+'-'+j+'-offset-'+k);
-						trackedClasses.push('col-'+size+'-'+j+'-push-'+k);
-						trackedClasses.push('col-'+size+'-'+j+'-pull-'+k);
-					}
-				}
-			}
-			
-			return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
-			
-		};
-		
-		var detectedBootstrapFormUsages = function(domClasses) {
-			
-			var trackedClasses = [
-				'form-group', 'form-group-xs', 'form-group-sm', 'form-group-md', 'form-group-lg',
-				'form-control', 'form-horizontal', 'form-inline',
-				'btn','btn-primary','btn-secondary','btn-success','btn-warning','btn-danger','btn-error'
-			];
-			
-			return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
-			
-		};
-		
-		var detectedBootstrapAlertUsages = function(domClasses) {
-			
-			var trackedClasses = [
-				'alert','alert-primary','alert-secondary','alert-success','alert-warning','alert-danger','alert-error'
-			];
-			
-			return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
-			
-		};
-		
-		var detectedBootstrapFloatUsages = function(domClasses) {
-			
-			var trackedClasses = [
-				'pull-left','pull-right',
-			];
-			
-			return trackedClasses.reduce((a,b) => a+(domClasses[b]|0), 0);
-			
-		};
+		}
 
-		//
-		//
-		//
-		var results = {
+        //
+        //
+        //
+        var results = {
 			
-			ClassesUsed: domClassesArray.length,
-			ClassesRecognized: Object.keys(cssClasses).length,
-			ClassesUsedRecognized: domClassesArray.filter(c => cssClasses[c]).length,
-			LonelyGatesClass: cssLonelyClassGatesMatches.length,
-			LonelyGatesClassUnique: cssUniqueLonelyClassGatesArray.length,
-			LonelyGatesClassUniqueUsed: cssUniqueLonelyClassGatesUsedArray.length,
-			LonelyGatesClassUniqueUsedWorth: cssUniqueLonelyClassGatesUsedWorthArray.length,
-			LonelyGatesId: cssLonelyIdGatesMatches.length,
-			LonelyGatesIdUnique: cssUniqueLonelyIdGatesArray.length,
-			LonelyGatesIdUniqueUsed: cssUniqueLonelyIdGatesUsedArray.length,
-			LonelyGatesIdUniqueUsedWorth: cssUniqueLonelyIdGatesUsedWorthArray.length,
+			DOMElements: document.all.length,
+			SelectorsFound: CSSUsage.StyleWalker.amountOfSelectors,
+			InlineStylesFound: CSSUsage.StyleWalker.amountOfInlineStyles,
+			SelectorsUnused: CSSUsage.StyleWalker.amountOfSelectorsUnused,
 			
-			ClearfixUsage: detectedClearfixUsages(domClasses),
-			VisibilityUsage: detectedVisibilityUsages(domClasses),
-			
-			ClearfixRecognized: detectedClearfixUsages(cssClasses),
-			VisibilityRecognized: detectedVisibilityUsages(cssClasses),
-			
-			Bootstrap: !!((window.jQuery||window.$) && (window.jQuery||window.$).fn.modal)|0,
-			
-			BootstrapGridUsage: detectedBootstrapGridUsages(domClasses),
-			BootstrapFormUsage: detectedBootstrapFormUsages(domClasses),
-			BootstrapFloatUsage: detectedBootstrapFloatUsages(domClasses),
-			BootstrapAlertUsage: detectedBootstrapAlertUsages(domClasses),
-			
-			BootstrapGridRecognized: detectedBootstrapGridUsages(cssClasses),
-			BootstrapFormRecognized: detectedBootstrapFormUsages(cssClasses),
-			BootstrapFloatRecognized: detectedBootstrapFloatUsages(cssClasses),
-			BootstrapAlertRecognized: detectedBootstrapAlertUsages(cssClasses),
-			
-		};
-		
-		console.log(CSSUsageResults.selectorUsages = results);
-		
-	}
-		
+			IdsUsed: domIdsArray.length,
+			IdsRecognized: Object.keys(cssIds).length,
+			IdsUsedRecognized: domIdsArray.filter(i => cssIds[i]).length,
+            
+            ClassesUsed: domClassesArray.length,
+            ClassesRecognized: Object.keys(cssClasses).length,
+            ClassesUsedRecognized: domClassesArray.filter(c => cssClasses[c]).length,
+            
+            ClearfixUsage: detectedClearfixUsages(domClasses),
+            VisibilityUsage: detectedVisibilityUsages(domClasses),
+            
+            ClearfixRecognized: detectedClearfixUsages(cssClasses),
+            VisibilityRecognized: detectedVisibilityUsages(cssClasses),
+ 			
+			Modernizer: !!window.Modernizer,
+			ModernizerUsages: detectedModernizerUsages(domClasses),
+           
+            Bootstrap: !!((window.jQuery||window.$) && (window.jQuery||window.$).fn.modal)|0,
+            
+            BootstrapGridUsage: detectedBootstrapGridUsages(domClasses),
+            BootstrapFormUsage: detectedBootstrapFormUsages(domClasses),
+            BootstrapFloatUsage: detectedBootstrapFloatUsages(domClasses),
+            BootstrapAlertUsage: detectedBootstrapAlertUsages(domClasses),
+            
+            BootstrapGridRecognized: detectedBootstrapGridUsages(cssClasses),
+            BootstrapFormRecognized: detectedBootstrapFormUsages(cssClasses),
+            BootstrapFloatRecognized: detectedBootstrapFloatUsages(cssClasses),
+            BootstrapAlertRecognized: detectedBootstrapAlertUsages(cssClasses),
+            
+        };
+        
+        console.log(CSSUsageResults.selectorUsages = results);
+        
+    }
+        
 }();
 
 //
@@ -667,18 +773,18 @@ void function() {
 
     if(document.readyState !== 'complete') {
         window.addEventListener('load', onready);
-		setTimeout(onready, 10000);
+        setTimeout(onready, 10000);
     } else {
         onready();
     }
 
     function onready() {
-		
-		// Prevent this code from running multiple times
-		var firstTime = !onready.hasAlreadyRun; onready.hasAlreadyRun = true;
-		if(!firstTime) { return; /* for now... */ }
-		
-		// Uncomment if you want to set breakpoints when running in the console
+        
+        // Prevent this code from running multiple times
+        var firstTime = !onready.hasAlreadyRun; onready.hasAlreadyRun = true;
+        if(!firstTime) { return; /* for now... */ }
+        
+        // Uncomment if you want to set breakpoints when running in the console
         //debugger;
 
         // Keep track of duration
@@ -687,92 +793,94 @@ void function() {
         // register tools
         CSSUsage.StyleWalker.ruleAnalyzers.push(CSSUsage.PropertyValuesAnalyzer);
         CSSUsage.StyleWalker.ruleAnalyzers.push(CSSUsage.SelectorAnalyzer);
-		CSSUsage.StyleWalker.elementAnalyzers.push(CSSUsage.DOMClassAnalyzer);
+        CSSUsage.StyleWalker.elementAnalyzers.push(CSSUsage.DOMClassAnalyzer);
 
         // perform analysis
         CSSUsage.StyleWalker.parseStylesheets();
         CSSUsage.StyleWalker.walkOverDomElements();
-		CSSUsage.SelectorAnalyzer.finalize();
+        CSSUsage.SelectorAnalyzer.finalize();
 
         // Update duration
-        CSSUsageResults.duration = performance.now() - startTime;
+        CSSUsageResults.duration = (performance.now() - startTime)|0;
 
         // DO SOMETHING WITH THE CSS OBJECT HERE
         console.log(CSSUsageResults);
 
         // Convert it to a more efficient format
-		INSTRUMENTATION_RESULTS.css = CSSUsageResults;
-		console.log(convertToTSV(INSTRUMENTATION_RESULTS));
+        INSTRUMENTATION_RESULTS.css = CSSUsageResults;
+        console.log(convertToTSV(INSTRUMENTATION_RESULTS));
         //var getValuesOf = Object.values || function(o) { return Object.keys(o).map(function(k) { return o[k]; }) };
         //CSSUsageResults.props = getValuesOf(CSSUsageResults.props);
 
-		function convertToTSV(INSTRUMENTATION_RESULTS) {
-			
-			var VALUE_COLUMN = 3;
-			var finishedRows = [];
-			var currentRowTemplate = [
-				INSTRUMENTATION_RESULTS.UA,
-				INSTRUMENTATION_RESULTS.URL,
-				INSTRUMENTATION_RESULTS.TIMESTAMP,
-				0
-			];
-			
-			currentRowTemplate.push('css');
-			convertToTSV(INSTRUMENTATION_RESULTS['css']);
-			currentRowTemplate.pop();
-			
-			currentRowTemplate.push('dom');
-			convertToTSV(INSTRUMENTATION_RESULTS['dom']);
-			currentRowTemplate.pop();
-			
-			return finishedRows.map((row) => (row.join('\t'))).join('\n');
-			
-			// helper function doing the actual conversion
-			function convertToTSV(object) {
-				if(object==null || object==undefined || typeof object == 'number' || typeof object == 'string') {
-					finishedRows.push(new Row(currentRowTemplate, ''+object));
-				} else {
-					for(var key in object) {
-						if({}.hasOwnProperty.call(object,key)) {
-							currentRowTemplate.push(key);
-							convertToTSV(object[key]);
-							currentRowTemplate.pop();
-						}
-					}
-				}
-			}
-			
-			// constructor for a row of our table
-			function Row(currentRowTemplate, value) {
-				
-				// Initialize an empty row with enough columns
-				var row = [
-					/*UA*/'',
-					/*URL*/'',
-					/*TIMESTAMP*/'',
-					/*0|1|...*/'',
-					/*css|dom|...*/'',
-					/*props|types|api|...*/'',
-					/*font-size|querySelector|...*/'',
-					/*count|values*/'',
-					/*px|em|...*/'',
-					/*...*/'',
-					/*...*/'',
-				];
-				
-				// Copy the column values from the template
-				for(var i = currentRowTemplate.length; i--;) {
-					row[i] = currentRowTemplate[i];
-				}
-				
-				// Add the value to the row
-				row[VALUE_COLUMN] = value;
-				
-				return row;
-			}
+        function convertToTSV(INSTRUMENTATION_RESULTS) {
+            
+            var VALUE_COLUMN = 4;
+            var finishedRows = [];
+            var currentRowTemplate = [
+                INSTRUMENTATION_RESULTS.UA,
+                INSTRUMENTATION_RESULTS.UASTRING,
+                INSTRUMENTATION_RESULTS.URL,
+                INSTRUMENTATION_RESULTS.TIMESTAMP,
+                0
+            ];
+            
+            currentRowTemplate.push('css');
+            convertToTSV(INSTRUMENTATION_RESULTS['css']);
+            currentRowTemplate.pop();
+            
+            currentRowTemplate.push('dom');
+            convertToTSV(INSTRUMENTATION_RESULTS['dom']);
+            currentRowTemplate.pop();
+            
+            return finishedRows.map((row) => (row.join('\t'))).join('\n');
+            
+            // helper function doing the actual conversion
+            function convertToTSV(object) {
+                if(object==null || object==undefined || typeof object == 'number' || typeof object == 'string') {
+                    finishedRows.push(new Row(currentRowTemplate, ''+object));
+                } else {
+                    for(var key in object) {
+                        if({}.hasOwnProperty.call(object,key)) {
+                            currentRowTemplate.push(key);
+                            convertToTSV(object[key]);
+                            currentRowTemplate.pop();
+                        }
+                    }
+                }
+            }
+            
+            // constructor for a row of our table
+            function Row(currentRowTemplate, value) {
+                
+                // Initialize an empty row with enough columns
+                var row = [
+                    /*UANAME:     edge                            */'',
+                    /*UASTRING:   mozilla/5.0 (...)               */'',
+                    /*URL:        http://.../...                  */'',
+                    /*TIMESTAMP:  1445622257303                   */'',
+                    /*VALUE:      0|1|...                         */'',
+                    /*DATATYPE:   css|dom|...                     */'',
+                    /*SUBTYPE:    props|types|api|...             */'',
+                    /*NAME:       font-size|querySelector|...     */'',
+                    /*CONTEXT:    count|values|...                */'',
+                    /*SUBCONTEXT: px|em|...                       */'',
+                    /*...                                         */'',
+                    /*...                                         */'',
+                ];
+                
+                // Copy the column values from the template
+                for(var i = currentRowTemplate.length; i--;) {
+                    row[i] = currentRowTemplate[i];
+                }
+                
+                // Add the value to the row
+                row[VALUE_COLUMN] = value;
+                
+                return row;
+            }
 
-		}
-		
+        }
+        
     }
 
 
