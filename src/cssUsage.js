@@ -69,7 +69,7 @@ void function() {
         selectorUsages: {},
         
         // this will contain selectors and the properties they refer to
-        cssrules: {"@cssrule":null,"@inline":null}, /*
+        cssrules: {"@stylerule":undefined,"@atrule":undefined,"@inline":undefined}, /*
         cssrules ~= {
             "#id:hover .class": {
                 count: 10,
@@ -99,6 +99,8 @@ void function() { "use strict";
         amountOfSelectorsUnused: 0,
         amountOfSelectors: 0,
     }
+    
+    var keyframes = {};
 
     function parseStylesheets() {
         var styleSheets = document.styleSheets;
@@ -116,6 +118,25 @@ void function() { "use strict";
                 }
             }
         }
+        
+        // Hack: rely on the results to find out which
+        // animations actually run, and parse their keyframes
+        var animations = (CSSUsageResults.props['animation-name']||{}).values||{};
+        for(var animation in keyframes) {
+            var keyframe = keyframes[animation];
+            var count = animations[animation];
+            keyframes[animation] = null
+            processRule(keyframe, count|0);
+        }
+        /*for(var animation in animations) {
+            var count = animations[animation];
+            var keyframe = keyframes[animation];
+            if(keyframe && typeof(count)=='number') {
+                keyframes[animation] = null
+                processRule(keyframe, count);
+            }
+        }*/
+
     }
 
     /*
@@ -138,22 +159,12 @@ void function() { "use strict";
 
                 // Until we can correlate animation usage
                 // to keyframes do not parse @keyframe rules
-                // TODO: https://github.com/gregwhitworth/css-usage/issues/3
                 if(rule.type != 7) {
-                    CSSUsageResults.types[rule.type|0]++; // Increase for rule type
-
-                    // Some CssRules have nested rules, so we need to
-                    // test those as well, this will start the recursion
-                    if (rule.cssRules && rule.cssRules) {
-                        walkOverCssRules(rule.cssRules, styleSheet);
-                    }
-
-                    // Some CssRules have style we can ananlyze
-                    if(rule.style) {
-                        runRuleAnalyzers(rule.style, rule.selectorText||{tagName:"@RULE"+rule.type}, rule.type);
-                    }
+                    processRule(rule);
+                } else {
+                    keyframes[rule.name] = rule;
                 }
-
+                
                 rulesProcessed++;
 
             }
@@ -164,6 +175,22 @@ void function() { "use strict";
                 styleSheetsProcessed++;
             }
 
+        }
+    }
+    
+    function processRule(rule, count) {
+        var styleSheet = rule.parentStyleSheet;
+        CSSUsageResults.types[rule.type|0]++; // Increase for rule type
+
+        // Some CssRules have nested rules, so we need to
+        // test those as well, this will start the recursion
+        if (rule.cssRules && rule.cssRules) {
+            walkOverCssRules(rule.cssRules, styleSheet);
+        }
+
+        // Some CssRules have style we can ananlyze
+        if(rule.style) {
+            runRuleAnalyzers(rule.style, count!=undefined ? count : rule.selectorText||0, rule.type);
         }
     }
 
@@ -181,20 +208,6 @@ void function() { "use strict";
                 runRuleAnalyzers(element.style, element, 1, true);
             }
         }
-        /*runElementAnalyzers(obj, index, depth);
-        if (obj.style.cssText != "") {
-            runRuleAnalyzers(obj.style, null, 1, true);
-        }
-
-        if (obj.hasChildNodes()) {
-            var child = obj.firstChild;
-            while (child) {
-                if (child.nodeType === 1) {
-                    walkOverDomElements(child, index++, depth+1);
-                }
-                child = child.nextSibling;
-            }
-        }*/
     }
 
     /*
@@ -346,13 +359,17 @@ void function() {
     CSSUsage.PropertyValuesAnalyzer.cleanSelectorText = cleanSelectorText;
 
     // This will loop over the styles declarations
-    // TODO: Come up with a better solution for parsing certain @rules
     var defaultStyle = getComputedStyle(document.createElement('div'));
     function parseStyle(style, selector, type, isInline) {
         
         // We want to filter rules that are not actually used
         var count = 0, matchedElements = [];
         var isRuleUnsed = () => {
+            
+            // If we get a count, we can trust it
+            if(typeof selector == 'number') {
+                count = selector;
+            }
             
             // If this is an inline style we know this will be applied once
             if (isInline == true) {
@@ -376,8 +393,8 @@ void function() {
         }
         
         // We need a generalized selector to collect some stats
-        var generalizedSelector1 = typeof(selector)=='string' ? "@cssrule" : '@inline'; // TODO
-        var generalizedSelector2 = typeof(selector)=='string' ? generalizedSelectorOf(selector) : ("@inline:"+selector.tagName).replace(/^[@].*[@]/,'@'); // TODO
+        var generalizedSelector1 = typeof(selector)=='string' ? "@stylerule" : typeof(selector)=='number' ? '@atrule' : '@inline'; // TODO
+        var generalizedSelector2 = typeof(selector)=='string' ? generalizedSelectorOf(selector) : typeof(selector)=='number' ? '@atrule:'+type : ("@inline:"+selector.tagName).replace(/^[@].*[@]/,'@'); // TODO
         var generalizedSelectorData1 = CSSUsageResults.cssrules[generalizedSelector1] || (CSSUsageResults.cssrules[generalizedSelector1] = {count:0,props:{}});
         var generalizedSelectorData2 = CSSUsageResults.cssrules[generalizedSelector2] || (CSSUsageResults.cssrules[generalizedSelector2] = {count:0,props:{}});
         generalizedSelectorData1.count++;
@@ -796,8 +813,8 @@ void function() {
         CSSUsage.StyleWalker.elementAnalyzers.push(CSSUsage.DOMClassAnalyzer);
 
         // perform analysis
-        CSSUsage.StyleWalker.parseStylesheets();
         CSSUsage.StyleWalker.walkOverDomElements();
+        CSSUsage.StyleWalker.parseStylesheets();
         CSSUsage.SelectorAnalyzer.finalize();
 
         // Update duration
