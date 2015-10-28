@@ -66,11 +66,11 @@ void function() {
         }*/
         
         // this will contains the various datapoints we measure on css selector usage
-        selectorUsages: {},
+        usages: {},
         
         // this will contain selectors and the properties they refer to
-        cssrules: {"@stylerule":undefined,"@atrule":undefined,"@inline":undefined}, /*
-        cssrules ~= {
+        rules: {"@stylerule":undefined,"@atrule":undefined,"@inline":undefined}, /*
+        rules ~= {
             "#id:hover .class": {
                 count: 10,
                 props: {
@@ -91,18 +91,33 @@ void function() {
 void function() { "use strict";
 
     CSSUsage.StyleWalker = {
+        
+        // This array contains the list of functions being run on each CSSStyleDeclaration
+        // [ function(style, selectorText_matchCount_or_element, ruleType) { ... }, ... ]
         ruleAnalyzers: [],
+        
+        // This array contains the list of functions being run on each DOM element of the page
+        // [ function(element) { ...} ]
         elementAnalyzers: [],
-        parseStylesheets: parseStylesheets,
+        
+        // 
+        walkOverCssStyles: walkOverCssStyles,
         walkOverDomElements: walkOverDomElements,
+        
+        // Those stats are being collected while walking over the css style rules
         amountOfInlineStyles: 0,
         amountOfSelectorsUnused: 0,
         amountOfSelectors: 0,
     }
     
+    // holds @keyframes temporarily while we wait to know how much they are used
     var keyframes = {};
-
-    function parseStylesheets() {
+    
+    /**
+     * For all stylesheets of the document, 
+     * walk through the stylerules and run analyzers
+     */
+    function walkOverCssStyles() {
         var styleSheets = document.styleSheets;
 
         // Loop through StyeSheets
@@ -128,104 +143,126 @@ void function() { "use strict";
             keyframes[animation] = null
             processRule(keyframe, count|0);
         }
-        /*for(var animation in animations) {
-            var count = animations[animation];
-            var keyframe = keyframes[animation];
-            if(keyframe && typeof(count)=='number') {
-                keyframes[animation] = null
-                processRule(keyframe, count);
-            }
-        }*/
 
     }
 
-    /*
-     * This is the work horse, this will will loop over the
-     * rules and then determine which ones were actually used
-     * and place them into our css object
+    /**
+     * This is the css work horse, this will will loop over the
+     * rules and then call the rule analyzers currently registered
      */
-    var totalRules = 0;
-    var rulesProcessed = 0;
-    var styleSheetsToProcess = document.styleSheets.length;
-    var styleSheetsProcessed = 0;
     function walkOverCssRules(/*CSSRuleList*/ cssRules, styleSheet) {
-        if (cssRules != undefined) {
-            totalRules += cssRules.length;
+        for (var ruleIndex = cssRules.length; ruleIndex--;) {
 
-            // Loop through Rules
-            for (var ruleIndex in cssRules) {
+            // Loop through the rules
+            var rule = cssRules[ruleIndex];
 
-                var rule = cssRules[ruleIndex];
-
-                // Until we can correlate animation usage
-                // to keyframes do not parse @keyframe rules
-                if(rule.type != 7) {
-                    processRule(rule);
-                } else {
-                    keyframes[rule.name] = rule;
-                }
+            // Until we can correlate animation usage
+            // to keyframes do not parse @keyframe rules
+            if(rule.type == 7) {
+                keyframes[rule.name] = rule;
+                continue;
+            }
+            
+            // Filter "@supports" which the current browser doesn't support
+            if(rule.type == 12 && (!CSS.supports || !CSS.supports(rule.conditionText))) {
+                continue;
+            }
                 
-                rulesProcessed++;
-
-            }
-
-            // If we're done processing all of the CSS rules for
-            // this stylesheet
-            if (rulesProcessed == totalRules) {
-                styleSheetsProcessed++;
-            }
+            // Other rules should be processed immediately
+            processRule(rule);
+                
 
         }
     }
     
+    /**
+     * This function takes a css rule and:
+     * [1] walk over its child rules if needed
+     * [2] call rule analyzers for that rule if it has style data
+     */
     function processRule(rule, count) {
-        var styleSheet = rule.parentStyleSheet;
-        CSSUsageResults.types[rule.type|0]++; // Increase for rule type
+        
+        // Increment the rule type's counter
+        CSSUsageResults.types[rule.type|0]++; 
 
-        // Some CssRules have nested rules, so we need to
-        // test those as well, this will start the recursion
-        if (rule.cssRules && rule.cssRules) {
-            walkOverCssRules(rule.cssRules, styleSheet);
+        // Some CssRules have nested rules to walk through:
+        if (rule.cssRules && rule.cssRules.length>0) {
+            
+            walkOverCssRules(rule.cssRules, rule.parentStyleSheet);
+            
         }
 
         // Some CssRules have style we can ananlyze
         if(rule.style) {
-            runRuleAnalyzers(rule.style, count!=undefined ? count : rule.selectorText||0, rule.type);
+            
+            var selectorText_matchCount_or_element = (
+                // if we have a count, use that count
+                // else, use the selector text of the current rule
+                // else, use a count of 0, which will not increment usage counters
+                count!=undefined ? count : rule.selectorText||0
+            );
+            
+            runRuleAnalyzers(rule.style, selectorText_matchCount_or_element, rule.type);
+            
         }
     }
 
-    /*
-     * This creates a dom tree to walk over so that you can
-     * get the inline styles and track those
+    /**
+     * This is the dom work horse, this will will loop over the
+     * dom elements and then call the element analyzers currently registered,
+     * as well as rule analyzers for inline styles
      */
     function walkOverDomElements(obj, index, depth) {
         obj = obj || document.documentElement; index = index|0; depth = depth|0;
 
+        // Loop through the elements
         var elements = [].slice.call(document.all,0);
         for(var i=elements.length; i--;) { var element=elements[i];
+        
+            // Analyze the element
             runElementAnalyzers(element, index);
+            
+            // Analyze its style, if any
             if (element.hasAttribute('style')) {
-                runRuleAnalyzers(element.style, element, 1, true);
+                
+                
+                // Inline styles count like a style rule with an element as selector
+                var ruleType = 1;
+                var isInline = true;
+                var selectorText_matchCount_or_element = (
+                    // We know only one element matches the style,
+                    // and we know which one:
+                    element
+                );
+                
+                runRuleAnalyzers(element.style, selectorText_matchCount_or_element, ruleType, isInline);
+                
             }
         }
+        
     }
 
-    /*
-     *
+    /**
+     * Given a rule and its data, send it to all rule analyzers
      */
-    function runRuleAnalyzers(style, selector, type, isInline) {
+    function runRuleAnalyzers(style, selectorText_matchCount_or_element, type, isInline) {
+        
+        // Keep track of the counters
         if(isInline) {
             CSSUsage.StyleWalker.amountOfInlineStyles++;
         } else {
             CSSUsage.StyleWalker.amountOfSelectors++;
         }
+        
+        // Run all rule analyzers
         CSSUsage.StyleWalker.ruleAnalyzers.forEach(function(runAnalyzer) {
-            runAnalyzer(style, selector, type, isInline);
+            runAnalyzer(style, selectorText_matchCount_or_element, type, isInline);
         });
+        
     }
     
-    /*
-     *
+    /**
+     * Given an element and its data, send it to all element analyzers
      */
     function runElementAnalyzers(element, index, depth) {
         CSSUsage.StyleWalker.elementAnalyzers.forEach(function(runAnalyzer) {
@@ -246,7 +283,7 @@ void function() {
         normalizeValue: normalizeValue
     };
 
-    /*
+    /**
      * This takes a string value and will create
      * an array from it.
      */
@@ -275,7 +312,7 @@ void function() {
         return values;
     }
 
-    /*
+    /**
      * This will take a string value and reduce it down
      * to only the aspects of the value we wish to keep
      */
@@ -300,8 +337,10 @@ void function() {
 
     //-----------------------------------------------------------------------------
 
-    // This will normalize the values so that
-    // we only keep the unique values
+    /**
+     * This will normalize the values so that
+     * we only keep the unique values
+     */ 
     function normalizeValue(value) {
 
         // Trim value on the edges
@@ -317,35 +356,36 @@ void function() {
             value = value.replace(/('|‘|’|")/g, "");
         }
 
+        // Normalize letter-casing
         value = value.toLowerCase();
 
         // We need to check if there are commas or spaces and
         // split on those so that we can keep track of each
-        if (value.indexOf(" ") != -1 || value.indexOf(",") != - 1) {
-            if(value.indexOf(",") != -1) {
-                value = value.split(",");
-            }
-            else {
-                value = value.split(" ");
-            }
+        if(value.indexOf(",") != -1) {
+            value = value.split(",");
+            
+        } else if(value.indexOf(" ") != -1) {
+            value = value.split(" ");
+            
+        } else {
+            value = [ value ];
+            
         }
 
         return value;
     }
 
-    /*
+    /**
      * So that we don't end up with a ton of color
      * values, this will determine if the color is a
      * keyword color value
      */
-    function isKeywordColor(color) {
+    function isKeywordColor(candidateColor) {
+        
         // Keyword colors from the W3C specs
-        var colors = ["aliceblue", "antiquewhite", "aqua", "aquamarine", "azure", "beige", "bisque", "black", "blanchedalmond", "blue", "blueviolet", "brown", "burlywood", "cadetblue", "chartreuse", "chocolate", "coral", "cornflowerblue", "cornsilk", "crimson", "cyan", "darkblue", "darkcyan", "darkgoldenrod", "darkgray", "darkgreen", "darkkhaki", "darkmagenta", "darkolivegreen", "darkorange", "darkorchid", "darkred", "darksalmon", "darkseagreen", "darkslateblue", "darkslategray", "darkturquoise", "darkviolet", "deeppink", "deepskyblue", "dimgray", "dodgerblue", "firebrick", "floralwhite", "forestgreen", "fuchsia", "gainsboro", "ghostwhite", "gold", "goldenrod", "gray", "green", "greenyellow", "honeydew", "hotpink", "indianred", "indigo", "ivory", "khaki", "lavender", "lavenderblush", "lawngreen", "lemonchiffon", "lightblue", "lightcoral", "lightcyan", "lightgoldenrodyellow", "lightgreen", "lightgrey", "lightpink", "lightsalmon", "lightseagreen", "lightskyblue", "lightslategray", "lightsteelblue", "lightyellow", "lime", "limegreen", "linen", "magenta", "maroon", "mediumaquamarine", "mediumblue", "mediumorchid", "mediumpurple", "mediumseagreen", "mediumslateblue", "mediumspringgreen", "mediumturquoise", "mediumvioletred", "midnightblue", "mintcream", "mistyrose", "moccasin", "navajowhite", "navy", "navyblue", "oldlace", "olive", "olivedrab", "orange", "orangered", "orchid", "palegoldenrod", "palegreen", "paleturquoise", "palevioletred", "papayawhip", "peachpuff", "peru", "pink", "plum", "powderblue", "purple", "red", "rosybrown", "royalblue", "saddlebrown", "salmon", "sandybrown", "seagreen", "seashell", "sienna", "silver", "skyblue", "slateblue", "slategray", "snow", "springgreen", "steelblue", "tan", "teal", "thistle", "tomato", "turquoise", "violet", "wheat", "white", "whitesmoke", "yellow", "yellowgreen"];
-
-        if (colors.indexOf(color) != -1) {
-            return true;
-        }
-        return false;
+        var isColorKeyword = /^(aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgray|darkgreen|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategray|darkturquoise|darkviolet|deeppink|deepskyblue|dimgray|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gray|green|greenyellow|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgreen|lightgrey|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategray|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|navyblue|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategray|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)$/;
+        return isColorKeyword.test(candidateColor);
+        
     }
 
 }();
@@ -355,48 +395,75 @@ void function() {
 //
 void function() {
 
-    CSSUsage.PropertyValuesAnalyzer = parseStyle;
+    CSSUsage.PropertyValuesAnalyzer = analyzeStyleOfRule;
     CSSUsage.PropertyValuesAnalyzer.cleanSelectorText = cleanSelectorText;
 
-    // This will loop over the styles declarations
+    // We put a computed style in cache for filtering purposes
     var defaultStyle = getComputedStyle(document.createElement('div'));
-    function parseStyle(style, selector, type, isInline) {
+    
+    /** This will loop over the styles declarations */
+    function analyzeStyleOfRule(style, selectorText_matchCount_or_element, type, isInline) {
         
         // We want to filter rules that are not actually used
-        var count = 0, matchedElements = [];
+        var count = (typeof selectorText_matchCount_or_element == 'number') ? selectorText_matchCount_or_element|0 : undefined;
+        var selector = (typeof selectorText_matchCount_or_element == 'string') ? selectorText_matchCount_or_element : undefined;
+        var selectorCat = /* either one of '@stylerule', '@inline' or '@atrule'*/undefined;
+        var matchedElement = (typeof selectorText_matchCount_or_element == 'object') ? selectorText_matchCount_or_element : undefined;
+        var matchedElements = [];
         var isRuleUnsed = () => {
             
             // If we get a count, we can trust it
-            if(typeof selector == 'number') {
-                count = selector;
-            }
+            if(typeof count == 'number') {
+                
+                selectorCat = '@atrule';
+                selector = '@atrule:'+type;
+                
+            } else {
+                
+                // reset count to 0
+                count = 0;
+                
+                // If there's a selector, we can see how many times it matches
+                // If there is a pseudo style, clean it
+                if (selector !== undefined) {
+                    
+                    selectorCat = '@stylerule';
+                    
+                    var matchedElementsNL = document.querySelectorAll(cleanSelectorText(selector))
+                    matchedElements = [].slice.call(matchedElementsNL, 0);
+                    count += matchedElements.length;
+                    
+                }
             
-            // If this is an inline style we know this will be applied once
-            if (isInline == true) {
-                matchedElements.push(selector);
-                count += 1; 
-            }
+                // If this is an inline style we know this will be applied once
+                if (matchedElement !== undefined) {
+                    
+                    selectorCat = '@inline';
+                    selector = '@inline:'+matchedElement.tagName;
+                    
+                    matchedElements.push(matchedElement);
+                    count += 1; 
+                    
+                }
             
-            // If there's a selector, we can see how many times it matches
-            // If there is a pseudo style, clean it
-            if (typeof selector == 'string') {
-                var matchedElementsNL = document.querySelectorAll(cleanSelectorText(selector))
-                matchedElements = [].slice.call(matchedElementsNL, 0);
-                count += matchedElements.length;
             }
             
             return count == 0;
         };
         
+        // Keep track of unused rules
         if(isRuleUnsed()) {
             CSSUsage.StyleWalker.amountOfSelectorsUnused++;
         }
         
         // We need a generalized selector to collect some stats
-        var generalizedSelector1 = typeof(selector)=='string' ? "@stylerule" : typeof(selector)=='number' ? '@atrule' : '@inline'; // TODO
-        var generalizedSelector2 = typeof(selector)=='string' ? generalizedSelectorOf(selector) : typeof(selector)=='number' ? '@atrule:'+type : ("@inline:"+selector.tagName).replace(/^[@].*[@]/,'@'); // TODO
-        var generalizedSelectorData1 = CSSUsageResults.cssrules[generalizedSelector1] || (CSSUsageResults.cssrules[generalizedSelector1] = {count:0,props:{}});
-        var generalizedSelectorData2 = CSSUsageResults.cssrules[generalizedSelector2] || (CSSUsageResults.cssrules[generalizedSelector2] = {count:0,props:{}});
+        // TODO: transform this into an array of generalized selectors
+        var generalizedSelector1 = selectorCat;
+        var generalizedSelector2 = (selectorCat=='@stylerule') ? generalizedSelectorOf(selector) : selector;
+        
+        // Increment the occurence counter of found generalized selectors
+        var generalizedSelectorData1 = CSSUsageResults.rules[generalizedSelector1] || (CSSUsageResults.rules[generalizedSelector1] = {count:0,props:{}});
+        var generalizedSelectorData2 = CSSUsageResults.rules[generalizedSelector2] || (CSSUsageResults.rules[generalizedSelector2] = {count:0,props:{}});
         generalizedSelectorData1.count++;
         generalizedSelectorData2.count++;
         
@@ -465,42 +532,7 @@ void function() {
 
     //-------------------------------------------------------------------------
 
-    /*
-     * The document.styleSheets lists all of the
-     * styles in camel case (e.g. "transitionDelay") but
-     * we store them in our props as "transition-delay" so we need
-     * to normalize those values to be able to do string comparisons
-     */
-    function normalizeKey(key) {
-        var cache = normalizeKey.cache || (normalizeKey.cache=Object.create(null));
-        var result, resultFromCache = cache[key];
-        if(resultFromCache) {
-            return resultFromCache;
-        } else {
-            result = key.replace(/([a-z])([A-Z])/g, "$1-$2").replace(/^ms-/,'-ms-');
-            result = result.toLowerCase();
-            switch(result) { case 'stylefloat': case 'cssfloat': return cache[key]='float'; default: return cache[key]=result; }
-        }
-    }
-
-    /*
-     * This will scan the CSS Props object array
-     * and determine if the object exists
-     */
-    function propertyExists(propertyName) {
-        return propertyName in CSSUsageResults.props;
-    }
-
-    /*
-     * This scans the values of all of the properties
-     * to determine if the value exists
-     */
-    function valueExists(propertyName, valueName) {
-        return propertyExists(propertyName) && valueName in CSSUsageResults.props[propertyName].values;
-        
-    }
-
-    /*
+    /**
      * If you try to do querySelectorAll on pseudo selectors
      * it returns 0 because you are not actually doing the action the pseudo is stating those things,
      * but we will honor those declarations and we don't want them to be missed,
@@ -510,10 +542,14 @@ void function() {
         if(text.indexOf(':') == -1) {
             return text;
         } else {
-            return text.replace(/([*a-zA-Z]?):(?:hover|active|focus|before|after)|::(?:before|after)/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([*a-zA-Z]?)<</g,'$1');
+            return text.replace(/([-_a-zA-Z0-9*]?):(?:hover|active|focus|before|after)|::(?:before|after)*/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([*a-zA-Z]?)<</g,'$1');
         }
     }
     
+    /**
+     * Returns an anonimized version of the selector.
+     * @example "#menu.open:hover>a.submenu" => "#id.class:hover > a.class"
+     */
     function generalizedSelectorOf(value) {
         
         // Trim
@@ -536,12 +572,12 @@ void function() {
         
         // Simplify .class
         if (value.indexOf(".") != -1) {
-            value = value.replace(/[.][a-zA-Z][-_a-zA-Z0-9]*/g, ".class");
+            value = value.replace(/[.][-_a-zA-Z][-_a-zA-Z0-9]*/g, ".class");
         }
         
         // Simplify #id
         if (value.indexOf("#") != -1) {
-            value = value.replace(/[#][a-zA-Z][-_a-zA-Z0-9]*/g, "#id");
+            value = value.replace(/[#][-_a-zA-Z][-_a-zA-Z0-9]*/g, "#id");
         }
         
         // Normalize combinators
@@ -561,26 +597,41 @@ void function() {
 //
 void function() {
     
-    var domStats = { count: 0, maxDepth: 1 };
+    // 
+    // To understand framework and general css usage, we collect stats about classes, ids and pseudos.
+    // Those objects have the following shape: 
+    // {"hover":5,"active":1,"focus":2}
+    // 
+    var cssPseudos = Object.create(null); // collect stats about which pseudo-classes and pseudo-elements are used in the css
+    var domClasses = Object.create(null); // collect stats about which css classes are found in the <... class> attributes of the dom
+    var cssClasses = Object.create(null); // collect stats about which css classes are used in the css
+    var domIds = Object.create(null);     // collect stats about which ids are found in the <... id> attributes of the dom
+    var cssIds = Object.create(null);     // collect stats about which ids are used in the css
     
-    var cssPseudos = {};
-    var domClasses = {};
-    var cssClasses = {};
-    var domIds = {};
-    var cssIds = {};
+    // 
+    // To understand Modernizer usage, we need to know how often some classes are used at the front of a selector
+    // While we're at it, the code also collect the state for ids
+    // 
+    var cssLonelyIdGates = Object.create(null);    // .class something-else ==> {"class":1}
+    var cssLonelyClassGates = Object.create(null); // #id something-else ==> {"id":1}
+    var cssLonelyClassGatesMatches = [];           // .class something-else ==> [".class something-else"]
+    var cssLonelyIdGatesMatches = [];              // #id something-else ==> ["#id something-else"]
     
-    var cssLonelyIdGates = {__proto__:null};
-    var cssLonelyClassGates = {__proto__:null};
-    var cssLonelyClassGatesMatches = [];
-    var cssLonelyIdGatesMatches = [];
+    //
+    // These regular expressions catch patterns we want to track (see before)
+    //
+    var ID_REGEXP = /[#][-_a-zA-Z][-_a-zA-Z0-9]*/g;     // #id
+    var ID_REGEXP1 = /[#][-_a-zA-Z][-_a-zA-Z0-9]*/;     // #id (only the first one)
+    var CLASS_REGEXP = /[.][-_a-zA-Z][-_a-zA-Z0-9]*/g;  // .class
+    var CLASS_REGEXP1 = /[.][-_a-zA-Z][-_a-zA-Z0-9]*/;  // .class (only the first one)
+    var PSEUDO_REGEXP = /[:][-_a-zA-Z][-_a-zA-Z0-9]*/g; // :pseudo (only the )
+    var GATEID_REGEXP = /^\s*[#][-_a-zA-Z][-_a-zA-Z0-9]*([.][-_a-zA-Z][-_a-zA-Z0-9]*|[:][-_a-zA-Z][-_a-zA-Z0-9]*)*\s+[^>+{, ][^{,]+$/; // #id ...
+    var GATECLASS_REGEXP = /^\s*[.][-_a-zA-Z][-_a-zA-Z0-9]*([:][-_a-zA-Z][-_a-zA-Z0-9]*)*\s+[^>+{, ][^{,]+$/; // .class ...
     
-    var ID_REGEXP = /[#][a-zA-Z][-_a-zA-Z0-9]*/g;
-    var ID_REGEXP1 = /[#][a-zA-Z][-_a-zA-Z0-9]*/;
-    var CLASS_REGEXP = /[.][a-zA-Z][-_a-zA-Z0-9]*/g;
-    var CLASS_REGEXP1 = /[.][a-zA-Z][-_a-zA-Z0-9]*/;
-    var PSEUDO_REGEXP = /[:][a-zA-Z][-_a-zA-Z0-9]*/g;
-    var GATEID_REGEXP = /^\s*[#][a-zA-Z][-_a-zA-Z0-9]*([.][a-zA-Z][-_a-zA-Z0-9]*|[:][a-zA-Z][-_a-zA-Z0-9]*)*\s+[^>+{, ][^{,]+$/;
-    var GATECLASS_REGEXP = /^\s*[.][a-zA-Z][-_a-zA-Z0-9]*([:][a-zA-Z][-_a-zA-Z0-9]*)*\s+[^>+{, ][^{,]+$/;
+    /**
+     * From a css selector text and a set of counters, 
+     * increment the counters for the matches in the selector of the 'feature' regular expression
+     */
     function extractFeature(feature, selector, counters) {
         var instances = (selector.match(feature)||[]).map(function(s) { return s.substr(1) });
         instances.forEach((instance) => {
@@ -588,6 +639,9 @@ void function() {
         });
     }
     
+    /**
+     * This analyzer will collect over the selectors the stats defined before
+     */
     CSSUsage.SelectorAnalyzer = function parseSelector(style, selectorsText) {
         if(typeof selectorsText != 'string') return;
             
@@ -612,6 +666,9 @@ void function() {
         
     }
     
+    /**
+     * This analyzer will collect over the dom elements the stats defined before
+     */
     CSSUsage.DOMClassAnalyzer = function(element) {
         
         // collect classes used in the wild
@@ -629,19 +686,26 @@ void function() {
         
     }
     
+    /**
+     * This function will be called when all stats have been collected
+     * at which point we will agregate some of them in useful values like Bootstrap usages, etc...
+     */
     CSSUsage.SelectorAnalyzer.finalize = function() {
         
+        // get arrays of the classes/ids used ({"hover":5} => ["hover"]))
         var domClassesArray = Object.keys(domClasses);
         var cssClassesArray = Object.keys(cssClasses);
         var domIdsArray = Object.keys(domIds);
         var cssIdsArray = Object.keys(cssIds);
 
+        // get arrays of the .class gates used ({"hover":5} => ["hover"]), filter irrelevant entries
         var cssUniqueLonelyClassGatesArray = Object.keys(cssLonelyClassGates);
         var cssUniqueLonelyClassGatesUsedArray = cssUniqueLonelyClassGatesArray.filter((c) => domClasses[c]);
         var cssUniqueLonelyClassGatesUsedWorthArray = cssUniqueLonelyClassGatesUsedArray.filter((c)=>(cssLonelyClassGates[c]>9));
         console.log(cssLonelyClassGates);
         console.log(cssUniqueLonelyClassGatesUsedWorthArray);
 
+        // get arrays of the #id gates used ({"hover":5} => ["hover"]), filter irrelevant entries
         var cssUniqueLonelyIdGatesArray = Object.keys(cssLonelyIdGates);
         var cssUniqueLonelyIdGatesUsedArray = cssUniqueLonelyIdGatesArray.filter((c) => domIds[c]);
         var cssUniqueLonelyIdGatesUsedWorthArray = cssUniqueLonelyIdGatesUsedArray.filter((c)=>(cssLonelyIdGates[c]>9));
@@ -649,8 +713,11 @@ void function() {
         console.log(cssUniqueLonelyIdGatesUsedWorthArray);
         
         //
+        // report how many times the classes in the following arrays have been used in the dom
+        // (general stats)
         //
-        //
+        
+        /** count how many times the usual clearfix classes are used */
         var detectedClearfixUsages = function(domClasses) {
             
             var trackedClasses = [
@@ -661,6 +728,7 @@ void function() {
             
         };
         
+        /** count how many times the usual hide/show classes are used */
         var detectedVisibilityUsages = function(domClasses) {
             
             var trackedClasses = [
@@ -672,8 +740,10 @@ void function() {
         };
         
         //
+        // report how many times the classes in the following arrays have been used in the dom
+        // (bootstrap stats)
         //
-        //
+        
         var detectedBootstrapGridUsages = function(domClasses) {
             
             var trackedClasses = [];
@@ -726,9 +796,14 @@ void function() {
             
         };
         
+        //
+        // report how many times the classes in the following arrays have been used as css gate
+        // (modernizer stats)
+        //
+        
         var detectedModernizerUsages = function(domClasses) {
             
-            var ModernizerUsages = {count:0,values:{}};
+            var ModernizerUsages = {count:0,values:{/*  "js":1,  "no-js":2  */}};
             var trackedClasses = ["js","ambientlight","applicationcache","audio","batteryapi","blobconstructor","canvas","canvastext","contenteditable","contextmenu","cookies","cors","cryptography","customprotocolhandler","customevent","dart","dataview","emoji","eventlistener","exiforientation","flash","fullscreen","gamepads","geolocation","hashchange","hiddenscroll","history","htmlimports","ie8compat","indexeddb","indexeddbblob","input","search","inputtypes","intl","json","olreversed","mathml","notification","pagevisibility","performance","pointerevents","pointerlock","postmessage","proximity","queryselector","quotamanagement","requestanimationframe","serviceworker","svg","templatestrings","touchevents","typedarrays","unicoderange","unicode","userdata","vibrate","video","vml","webintents","animation","webgl","websockets","xdomainrequest","adownload","audioloop","audiopreload","webaudio","lowbattery","canvasblending","todataurljpeg,todataurlpng,todataurlwebp","canvaswinding","getrandomvalues","cssall","cssanimations","appearance","backdropfilter","backgroundblendmode","backgroundcliptext","bgpositionshorthand","bgpositionxy","bgrepeatspace,bgrepeatround","backgroundsize","bgsizecover","borderimage","borderradius","boxshadow","boxsizing","csscalc","checked","csschunit","csscolumns","cubicbezierrange","display-runin","displaytable","ellipsis","cssescape","cssexunit","cssfilters","flexbox","flexboxlegacy","flexboxtweener","flexwrap","fontface","generatedcontent","cssgradients","hsla","csshyphens,softhyphens,softhyphensfind","cssinvalid","lastchild","cssmask","mediaqueries","multiplebgs","nthchild","objectfit","opacity","overflowscrolling","csspointerevents","csspositionsticky","csspseudoanimations","csspseudotransitions","cssreflections","regions","cssremunit","cssresize","rgba","cssscrollbar","shapes","siblinggeneral","subpixelfont","supports","target","textalignlast","textshadow","csstransforms","csstransforms3d","preserve3d","csstransitions","userselect","cssvalid","cssvhunit","cssvmaxunit","cssvminunit","cssvwunit","willchange","wrapflow","classlist","createelementattrs,createelement-attrs","dataset","documentfragment","hidden","microdata","mutationobserver","bdi","datalistelem","details","outputelem","picture","progressbar,meter","ruby","template","time","texttrackapi,track","unknownelements","es5array","es5date","es5function","es5object","es5","strictmode","es5string","es5syntax","es5undefined","es6array","contains","generators","es6math","es6number","es6object","promises","es6string","devicemotion,deviceorientation","oninput","filereader","filesystem","capture","fileinput","directory","formattribute","localizednumber","placeholder","requestautocomplete","formvalidation","sandbox","seamless","srcdoc","apng","jpeg2000","jpegxr","sizes","srcset","webpalpha","webpanimation","webplossless,webp-lossless","webp","inputformaction","inputformenctype","inputformmethod","inputformtarget","beacon","lowbandwidth","eventsource","fetch","xhrresponsetypearraybuffer","xhrresponsetypeblob","xhrresponsetypedocument","xhrresponsetypejson","xhrresponsetypetext","xhrresponsetype","xhr2","scriptasync","scriptdefer","speechrecognition","speechsynthesis","localstorage","sessionstorage","websqldatabase","stylescoped","svgasimg","svgclippaths","svgfilters","svgforeignobject","inlinesvg","smil","textareamaxlength","bloburls","datauri","urlparser","videoautoplay","videoloop","videopreload","webglextensions","datachannel","getusermedia","peerconnection","websocketsbinary","atob-btoa","framed","matchmedia","blobworkers","dataworkers","sharedworkers","transferables","webworkers"];
             trackedClasses.forEach(function(c) { var count = cssLonelyClassGates[c]; if(!count) return; ModernizerUsages.count += count; ModernizerUsages.values[c]=count; });
             return ModernizerUsages;
@@ -740,25 +815,32 @@ void function() {
         //
         var results = {
             
+            // how many elements on the page (used to compute percentages for css.props)
             DOMElements: document.all.length,
+            
+            // how many selectors vs inline style, and other usage stats
             SelectorsFound: CSSUsage.StyleWalker.amountOfSelectors,
             InlineStylesFound: CSSUsage.StyleWalker.amountOfInlineStyles,
             SelectorsUnused: CSSUsage.StyleWalker.amountOfSelectorsUnused,
             
+            // ids stats
             IdsUsed: domIdsArray.length,
             IdsRecognized: Object.keys(cssIds).length,
             IdsUsedRecognized: domIdsArray.filter(i => cssIds[i]).length,
             
+            // classes stats
             ClassesUsed: domClassesArray.length,
             ClassesRecognized: Object.keys(cssClasses).length,
             ClassesUsedRecognized: domClassesArray.filter(c => cssClasses[c]).length,
             
+            // non-framework usage stats (see before)
             ClearfixUsage: detectedClearfixUsages(domClasses),
             VisibilityUsage: detectedVisibilityUsages(domClasses),
             
             ClearfixRecognized: detectedClearfixUsages(cssClasses),
             VisibilityRecognized: detectedVisibilityUsages(cssClasses),
             
+            // framework usage stats (see before)
             Modernizer: !!window.Modernizer,
             ModernizerUsages: detectedModernizerUsages(domClasses),
            
@@ -776,7 +858,7 @@ void function() {
             
         };
         
-        console.log(CSSUsageResults.selectorUsages = results);
+        console.log(CSSUsageResults.usages = results);
         
     }
         
@@ -789,12 +871,21 @@ void function() {
 void function() {
 
     if(document.readyState !== 'complete') {
+        
+        // if the document is loading, run when it loads or in 10s, whichever is less
         window.addEventListener('load', onready);
         setTimeout(onready, 10000);
+        
     } else {
+        
+        // if the document is ready, run now
         onready();
+        
     }
 
+    /**
+     * This is the main entrypoint of our script
+     */
     function onready() {
         
         // Prevent this code from running multiple times
@@ -814,7 +905,7 @@ void function() {
 
         // perform analysis
         CSSUsage.StyleWalker.walkOverDomElements();
-        CSSUsage.StyleWalker.parseStylesheets();
+        CSSUsage.StyleWalker.walkOverCssStyles();
         CSSUsage.SelectorAnalyzer.finalize();
 
         // Update duration
@@ -826,9 +917,8 @@ void function() {
         // Convert it to a more efficient format
         INSTRUMENTATION_RESULTS.css = CSSUsageResults;
         console.log(convertToTSV(INSTRUMENTATION_RESULTS));
-        //var getValuesOf = Object.values || function(o) { return Object.keys(o).map(function(k) { return o[k]; }) };
-        //CSSUsageResults.props = getValuesOf(CSSUsageResults.props);
 
+        /** convert the instrumentation results to a spreadsheet for analysis */
         function convertToTSV(INSTRUMENTATION_RESULTS) {
             
             var VALUE_COLUMN = 4;
@@ -851,7 +941,7 @@ void function() {
             
             return finishedRows.map((row) => (row.join('\t'))).join('\n');
             
-            // helper function doing the actual conversion
+            /** helper function doing the actual conversion */
             function convertToTSV(object) {
                 if(object==null || object==undefined || typeof object == 'number' || typeof object == 'string') {
                     finishedRows.push(new Row(currentRowTemplate, ''+object));
@@ -866,7 +956,7 @@ void function() {
                 }
             }
             
-            // constructor for a row of our table
+            /** constructor for a row of our table */
             function Row(currentRowTemplate, value) {
                 
                 // Initialize an empty row with enough columns
