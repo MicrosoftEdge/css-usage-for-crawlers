@@ -124,7 +124,7 @@ void function() {
     // Don't run if already ran
     if (window.CSSUsage) throw new Error("CSSUsage: only one run will be executed; check the right version was chosen");
     
-}
+}();
 
 //
 // Prepare our global namespace
@@ -756,6 +756,9 @@ void function() {
         
         // Trim whitespace
         value = value.trim();
+        
+        // Remove unnecessary * to match Chrome
+        value = value.replace(/[*]([#.\x5B:])/g,'$1');
         
         // Now we can sort components so that all browsers give results similar to Chrome
         var ID_REGEXP = "[#]id";          // #id
