@@ -28,8 +28,10 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 	
 	// Add it to the document dom
 	var output = document.createElement('script');
-	output.id = "";
+	output.id = "css-usage-tsv-results";
 	output.textContent = tsvString;
+    output.type = 'text/plain';
+    document.querySelector('head').appendChild(output);
 
 	/** convert the instrumentation results to a spreadsheet for analysis */
 	function convertToTSV(INSTRUMENTATION_RESULTS) {
