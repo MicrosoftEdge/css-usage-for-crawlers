@@ -167,7 +167,7 @@ void function() {
         }*/
         
         // this will contains the various datapoints we measure on css selector usage
-        usages: {},
+        usages: {"SuccessfulCrawls":1},
         
         // this will contain selectors and the properties they refer to
         rules: {"@stylerule":0,"@atrule":0,"@inline":0}, /*
@@ -1029,6 +1029,9 @@ void function() {
         //
         //
         var results = {
+            
+            // how many crawls are aggregated in this file (one of course in this case)
+            SuccessfulCrawls: 1,
             
             // how many elements on the page (used to compute percentages for css.props)
             DOMElements: document.all.length,
