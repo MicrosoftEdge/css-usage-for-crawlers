@@ -1063,7 +1063,7 @@ void function() {
             ModernizerDOMUsages: detectedModernizerUsages(domClasses),
             ModernizerCSSUsages: detectedModernizerUsages(cssLonelyClassGates),
            
-            Bootstrap: !!((window.jQuery||window.$) && (window.jQuery||window.$).fn.modal)|0,
+            Bootstrap: !!((window.jQuery||window.$) && (window.jQuery||window.$).fn && (window.jQuery||window.$).fn.modal)|0,
             
             BootstrapGridUsage: detectedBootstrapGridUsages(domClasses),
             BootstrapFormUsage: detectedBootstrapFormUsages(domClasses),
