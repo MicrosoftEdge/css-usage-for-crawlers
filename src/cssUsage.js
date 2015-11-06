@@ -895,6 +895,7 @@ void function() {
         // (modernizer stats)
         //
         
+        // https://modernizr.com/docs#features
         var detectedModernizerUsages = function(cssLonelyClassGates) {
             
             var ModernizerUsages = {count:0,values:{/*  "js":1,  "no-js":2  */}};
@@ -907,6 +908,78 @@ void function() {
                 ModernizerUsages.count += count; 
                 ModernizerUsages.values[c]=count; 
             }
+            
+        }
+        
+        //
+        // try to detect other popular frameworks
+        //
+        
+        // https://github.com/Dogfalo/materialize/blob/master/sass/components/_grid.scss
+        var hasDogfaloMaterializeUsage = function() {
+            
+            if(!document.querySelector(".container > .row > .col")) {
+                return false;
+            }
+            
+            for(var i = 12+1; --i;) {
+                for(var s of ['s','m','l']) {
+                    if(document.querySelector(".container > .row > .col."+s+""+i)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+            
+        }
+        
+        // http://blueprintcss.org/tests/parts/grid.html
+        var hasBluePrintUsage = function() {
+            
+            if(!document.querySelector(".container")) {
+                return false;
+            }
+            
+            for(var i = 24+1; --i;) {
+                if(document.querySelector(".container > .span-"+i)) {
+                    return true;
+                }
+            }
+            return false;
+            
+        }
+        
+        // https://raw.githubusercontent.com/csswizardry/inuit.css/master/generic/_widths.scss
+        var hasInuitUsage = function() {
+            
+            if(!document.querySelector(".grid .grid__item")) {
+                return false;
+            }
+            
+            for(var fraction of ["one-whole","one-half","one-third","two-thirds","one-quarter","two-quarters","one-half","three-quarters","one-fifth","two-fifths","three-fifths","four-fifths","one-sixth","two-sixths","one-third","three-sixths","one-half","four-sixths","two-thirds","five-sixths","one-eighth","two-eighths","one-quarter","three-eighths","four-eighths","one-half","five-eighths","six-eighths","three-quarters","seven-eighths","one-tenth","two-tenths","one-fifth","three-tenths","four-tenths","two-fifths","five-tenths","one-half","six-tenths","three-fifths","seven-tenths","eight-tenths","four-fifths","nine-tenths","one-twelfth","two-twelfths","one-sixth","three-twelfths","one-quarter","four-twelfths","one-third","five-twelfths","six-twelfths","one-half","seven-twelfths","eight-twelfths","two-thirds","nine-twelfths","three-quarters","ten-twelfths","five-sixths","eleven-twelfths"]) {
+                for(var ns of ["","palm-","lap-","portable-","desk-"]) {
+                    if(document.querySelector(".grid > .grid__item."+ns+fraction)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+            
+        }
+        
+        // http://www.gumbyframework.com/docs/grid/#!/basic-grid
+        var hasGrumbyUsage = function() {
+            
+            if(!document.querySelector(".row .columns")) {
+                return false;
+            }
+            
+            for(var fraction of ["one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve"]) {
+                if(document.querySelector(".row > .columns."+fraction)) {
+                    return true;
+                }
+            }
+            return false;
             
         }
 
@@ -937,28 +1010,33 @@ void function() {
             ClassesUsedRecognized: domClassesArray.filter(c => cssClasses[c]).length,
             
             // non-framework usage stats (see before)
-            ClearfixUsage: detectedClearfixUsages(domClasses),
-            VisibilityUsage: detectedVisibilityUsages(domClasses),
+            NFwkClearfixUsage: detectedClearfixUsages(domClasses),
+            NFwkVisibilityUsage: detectedVisibilityUsages(domClasses),
             
-            ClearfixRecognized: detectedClearfixUsages(cssClasses),
-            VisibilityRecognized: detectedVisibilityUsages(cssClasses),
+            NFwkClearfixRecognized: detectedClearfixUsages(cssClasses),
+            NFwkVisibilityRecognized: detectedVisibilityUsages(cssClasses),
             
             // framework usage stats (see before)
-            Modernizer: !!window.Modernizer,
-            ModernizerDOMUsages: detectedModernizerUsages(domClasses),
-            ModernizerCSSUsages: detectedModernizerUsages(cssLonelyClassGates),
+            FwkModernizer: !!window.Modernizer,
+            FwkModernizerDOMUsages: detectedModernizerUsages(domClasses),
+            FwkModernizerCSSUsages: detectedModernizerUsages(cssLonelyClassGates),
            
-            Bootstrap: !!((window.jQuery||window.$) && (window.jQuery||window.$).fn && (window.jQuery||window.$).fn.modal)|0,
+            FwkBootstrap: !!((window.jQuery||window.$) && (window.jQuery||window.$).fn && (window.jQuery||window.$).fn.modal)|0,
             
-            BootstrapGridUsage: detectedBootstrapGridUsages(domClasses),
-            BootstrapFormUsage: detectedBootstrapFormUsages(domClasses),
-            BootstrapFloatUsage: detectedBootstrapFloatUsages(domClasses),
-            BootstrapAlertUsage: detectedBootstrapAlertUsages(domClasses),
+            FwkBootstrapGridUsage: detectedBootstrapGridUsages(domClasses),
+            FwkBootstrapFormUsage: detectedBootstrapFormUsages(domClasses),
+            FwkBootstrapFloatUsage: detectedBootstrapFloatUsages(domClasses),
+            FwkBootstrapAlertUsage: detectedBootstrapAlertUsages(domClasses),
             
-            BootstrapGridRecognized: detectedBootstrapGridUsages(cssClasses),
-            BootstrapFormRecognized: detectedBootstrapFormUsages(cssClasses),
-            BootstrapFloatRecognized: detectedBootstrapFloatUsages(cssClasses),
-            BootstrapAlertRecognized: detectedBootstrapAlertUsages(cssClasses),
+            FwkBootstrapGridRecognized: detectedBootstrapGridUsages(cssClasses),
+            FwkBootstrapFormRecognized: detectedBootstrapFormUsages(cssClasses),
+            FwkBootstrapFloatRecognized: detectedBootstrapFloatUsages(cssClasses),
+            FwkBootstrapAlertRecognized: detectedBootstrapAlertUsages(cssClasses),
+            
+            FwkDogfaloMaterialize: hasDogfaloMaterializeUsage()|0,
+            FwkBluePrint: hasBluePrintUsage()|0,
+            FwkInuit: hasInuitUsage()|0,
+            FwkGrumby: hasGrumbyUsage()|0,
             
         };
         
