@@ -118,9 +118,6 @@ void function() { "use strict";
             }
             catch (e) {
                 console.log(e, e.stack);
-                if (e && (e.description||e.message||"").indexOf("Access") != -1) {
-                    styleSheetsToProcess--; // Since we can't parse this one we shouldn't depend on it to return results
-                }
             }
         }
         
