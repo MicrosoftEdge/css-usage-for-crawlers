@@ -486,6 +486,14 @@ void function() {
         generalizedSelectorsData.forEach((generalizedSelectorData) => {
             generalizedSelectorData.count++
         })
+		
+		// avoid most common browser lies
+		var cssText = ' '+style.cssText; 
+		if(navigator.userAgent.indexOf('Edge')>=0) {
+			cssText = cssText.replace(/border: medium; border-image: none;/i,'border: none;');
+			cssText = cssText.replace(/ border-image: none;/i,'');
+		}
+
         
         // For each property declaration in this rule, we collect some stats
         for (var i = style.length; i--;) {
@@ -497,23 +505,84 @@ void function() {
             // Only keep styles that were declared by the author
             // We need to make sure we're only checking string props
             var isValueInvalid = () => (typeof styleValue !== 'string' && styleValue != "" && styleValue != undefined);
-            var isPropertyUndefined = () => (((' '+style.cssText).indexOf(' '+key+':') == -1) && (styleValue=='initial' || !valueExistsInRootProperty(key, styleValue)));
+            var isPropertyUndefined = () => (((' '+cssText).indexOf(' '+key+':') == -1) && (styleValue=='initial' || !valueExistsInRootProperty(key, styleValue)));
+			var getBuggyValuesForThisBrowser = function() {
+				var buggyValues = getBuggyValuesForThisBrowser.cache;
+				if(buggyValues) { return buggyValues; }
+				else { buggyValues = {}; }
+				
+				// Edge reports initial value instead of "initial", we have to be cautious
+				if(navigator.userAgent.indexOf('Edge')>=0) {
+
+					buggyValues['*'] = 1; // make 0 values automatic for longhand properties
+					
+					//buggyValues['list-style-position:outside'] = 0;
+					buggyValues['list-style-image:none'] = 1;
+					//buggyValues['outline-color:invert'] = 0;
+					//buggyValues['outline-style:none'] = 0;
+					//buggyValues['outline-width:medium'] = 0;
+					//buggyValues['background-image:none'] = 0;
+					//buggyValues['background-attachment:scroll'] = 0;
+					//buggyValues['background-repeat:repeat'] = 0;
+					//buggyValues['background-repeat-x:repeat'] = 0;
+					//buggyValues['background-repeat-y:repeat'] = 0;
+					//buggyValues['background-position-x:0%'] = 0;
+					//buggyValues['background-position-y:0%'] = 0;
+					//buggyValues['background-size:auto'] = 0;
+					//buggyValues['background-origin:padding-box'] = 0;
+					//buggyValues['background-clip:border-box'] = 0;
+					//buggyValues['background-color:transparent'] = 0;
+					buggyValues['border-top-color:currentcolor'] = 1;
+					buggyValues['border-right-color:currentcolor'] = 1;
+					buggyValues['border-bottom-color:currentcolor'] = 1;
+					buggyValues['border-left-color:currentcolor'] = 1;
+					//buggyValues['border-top-style:solid'] = 0;
+					//buggyValues['border-right-style:solid'] = 0;
+					//buggyValues['border-bottom-style:solid'] = 0;
+					//buggyValues['border-left-style:solid'] = 0;
+					buggyValues['border-top-width:medium'] = 1;
+					buggyValues['border-right-width:medium'] = 1;
+					buggyValues['border-bottom-width:medium'] = 1;
+					buggyValues['border-left-width:medium'] = 1;
+					buggyValues['border-image-source:none'] = 1;
+					buggyValues['border-image-outset:0'] = 1;
+					buggyValues['border-image-width:1'] = 1;
+					buggyValues['border-image-repeat:repeat'] = 1;
+					buggyValues['border-image-repeat-x:repeat'] = 1;
+					buggyValues['border-image-repeat-y:repeat'] = 1;
+					buggyValues['line-height:normal'] = 1;
+					//buggyValues['font-size-adjust:none'] = 0;
+					buggyValues['font-stretch:normal'] = 1;
+					
+				}
+				
+				// Firefox reports initial values instead of "initial", we have to be cautious
+				if(navigator.userAgent.indexOf('Firefox')>=0) {
+					
+					buggyValues['*'] = 1; // make 0 values automatic for longhand properties
+					
+				}
+				
+				return getBuggyValuesForThisBrowser.cache = buggyValues;
+
+			};
             var valueExistsInRootProperty = (key,value) => { 
-                // avoid most common browser lies
-                var cssText = ' '+style.cssText; value = value.trim();
-                if(navigator.userAgent.indexOf('Edge')>=0) {
-                    if(key == 'border-image-source' && value=='none') { return false; }
-                    if(key == 'border-image-outset' && value=='0') { return false; }
-                    if(key == 'border-image-width' && value=='1') { return false; }
-                    if(/border-([a-zA-Z]+)-width/i.test(key) && value=='medium') { return false; }
-                    cssText = cssText.replace(/border: medium; border-image: none;/i,'border: none;');
-                    cssText = cssText.replace(/ border-image: none;/i,'');
-                }
+				value = value.trim();
+				
+				// detect suspicious values
+				var buggyValues = getBuggyValuesForThisBrowser();
+				
+				// apply common sense to the given value, per browser
+				var buggyState = buggyValues[(key+':'+value).toLowerCase()];
+				if(buggyState === 1) { return false; }
+				if(buggyState !== 0 && (!buggyValues['*'] || CSSShorthands.unexpand(key).length == 0)) { return true; }
+								
                 // ask the browser is the best we can do right now
                 var rootKey = key.split("-")[0]; if(key==rootKey) return false;
                 var values = value.split(/\s+|\s*,\s*/g);
                 var result = values.every((value) => (new RegExp(' '+rootKey+'(?:[-][-_a-zA-Z0-9]+)?[:][^;]*'+value.trim().replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1"),'gi')).test(cssText));
                 return result;
+				
             };
             
             if (isValueInvalid() || isPropertyUndefined()) {

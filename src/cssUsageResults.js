@@ -15,6 +15,17 @@ void function() {
 	};
 	window.INSTRUMENTATION_RESULTS_TSV = [];
 	
+	/* make the script work in the context of a webview */
+	var console = window.console || (window.console={log:function(){},warn:function(){},error:function(){}});
+	console.unsafeLog = console.log;
+	console.log = function() {
+		try {
+			this.unsafeLog.apply(this,arguments);
+		} catch(ex) {
+			// ignore
+		}
+	};
+	
 }();
 
 window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
