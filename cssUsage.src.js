@@ -6,11 +6,6 @@
 void function () {
     /**
      * Data collated from multiple W3C specs: http://www.w3.org/Style/CSS/current-work
-     * Only specs that are Candidate Recommendations or better are counted, with the
-     * exception of some Working Drafts that have a lot of traction in browser implementations.
-     * So far the WD specs included here are Animation, Transitions and Flexbox.
-     *
-     * @type {Object}
      */
     var shorthands = this.shorthandProperties = {
 		
@@ -1396,12 +1391,15 @@ void function() {
      */
     function onready() {
         
+        // Uncomment if you want to set breakpoints when running in the console
+        //debugger;
+        
         // Prevent this code from running multiple times
         var firstTime = !onready.hasAlreadyRun; onready.hasAlreadyRun = true;
         if(!firstTime) { return; /* for now... */ }
-        
-        // Uncomment if you want to set breakpoints when running in the console
-        //debugger;
+		
+		// Prevent this code from running when the page has no stylesheet (probably a redirect page)
+		if(document.styleSheets.length == 0) { return; }
 
         // Keep track of duration
         var startTime = performance.now();
