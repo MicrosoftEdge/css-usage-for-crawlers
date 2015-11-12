@@ -1136,12 +1136,15 @@ void function() {
      */
     function onready() {
         
+        // Uncomment if you want to set breakpoints when running in the console
+        //debugger;
+        
         // Prevent this code from running multiple times
         var firstTime = !onready.hasAlreadyRun; onready.hasAlreadyRun = true;
         if(!firstTime) { return; /* for now... */ }
-        
-        // Uncomment if you want to set breakpoints when running in the console
-        //debugger;
+		
+		// Prevent this code from running when the page has no stylesheet (probably a redirect page)
+		if(document.styleSheets.length == 0) { return; }
 
         // Keep track of duration
         var startTime = performance.now();
