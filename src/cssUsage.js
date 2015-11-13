@@ -4,7 +4,7 @@
 void function() {
     
     // Don't run in subframes for now
-    if (window.self !== window.top) throw new Error("CSSUsage: the script doesn't run in frames for now");
+    if (top.location.href !== location.href) throw new Error("CSSUsage: the script doesn't run in frames for now");
     
     // Don't run if already ran
     if (window.CSSUsage) throw new Error("CSSUsage: only one run will be executed; check the right version was chosen");
@@ -862,15 +862,15 @@ void function() {
         var cssUniqueLonelyClassGatesArray = Object.keys(cssLonelyClassGates);
         var cssUniqueLonelyClassGatesUsedArray = cssUniqueLonelyClassGatesArray.filter((c) => domClasses[c]);
         var cssUniqueLonelyClassGatesUsedWorthArray = cssUniqueLonelyClassGatesUsedArray.filter((c)=>(cssLonelyClassGates[c]>9));
-        console.log(cssLonelyClassGates);
-        console.log(cssUniqueLonelyClassGatesUsedWorthArray);
+        if(window.debugCSSUsage) console.log(cssLonelyClassGates);
+        if(window.debugCSSUsage) console.log(cssUniqueLonelyClassGatesUsedWorthArray);
 
         // get arrays of the #id gates used ({"hover":5} => ["hover"]), filter irrelevant entries
         var cssUniqueLonelyIdGatesArray = Object.keys(cssLonelyIdGates);
         var cssUniqueLonelyIdGatesUsedArray = cssUniqueLonelyIdGatesArray.filter((c) => domIds[c]);
         var cssUniqueLonelyIdGatesUsedWorthArray = cssUniqueLonelyIdGatesUsedArray.filter((c)=>(cssLonelyIdGates[c]>9));
-        console.log(cssLonelyIdGates);
-        console.log(cssUniqueLonelyIdGatesUsedWorthArray);
+        if(window.debugCSSUsage) console.log(cssLonelyIdGates);
+        if(window.debugCSSUsage) console.log(cssUniqueLonelyIdGatesUsedWorthArray);
         
         //
         // report how many times the classes in the following arrays have been used in the dom
@@ -1106,7 +1106,7 @@ void function() {
             
         };
         
-        console.log(CSSUsageResults.usages = results);
+        if(window.debugCSSUsage) console.log(CSSUsageResults.usages = results);
         
     }
         
@@ -1163,7 +1163,7 @@ void function() {
         CSSUsageResults.duration = (performance.now() - startTime)|0;
 
         // DO SOMETHING WITH THE CSS OBJECT HERE
-        console.log(CSSUsageResults);
+        if(window.debugCSSUsage) console.log(CSSUsageResults);
         if(window.onCSSUsageResults) {
             window.onCSSUsageResults(CSSUsageResults);
         };

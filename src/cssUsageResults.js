@@ -16,15 +16,19 @@ void function() {
 	window.INSTRUMENTATION_RESULTS_TSV = [];
 	
 	/* make the script work in the context of a webview */
-	var console = window.console || (window.console={log:function(){},warn:function(){},error:function(){}});
-	console.unsafeLog = console.log;
-	console.log = function() {
-		try {
-			this.unsafeLog.apply(this,arguments);
-		} catch(ex) {
-			// ignore
-		}
-	};
+	try {
+		var console = window.console || (window.console={log:function(){},warn:function(){},error:function(){}});
+		console.unsafeLog = console.log;
+		console.log = function() {
+			try {
+				this.unsafeLog.apply(this,arguments);
+			} catch(ex) {
+				// ignore
+			}
+		};
+	} catch (ex) {
+		// we tried...
+	}
 	
 }();
 
@@ -35,7 +39,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 	INSTRUMENTATION_RESULTS_TSV = convertToTSV(INSTRUMENTATION_RESULTS);
 	
 	var tsvString = INSTRUMENTATION_RESULTS_TSV.map((row) => (row.join('\t'))).join('\n');
-	console.log(tsvString);
+	if(window.debugCSSUsage) console.log(tsvString);
 	
 	// Add it to the document dom
 	var output = document.createElement('script');

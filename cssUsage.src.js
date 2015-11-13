@@ -145,15 +145,19 @@ void function() {
 	window.INSTRUMENTATION_RESULTS_TSV = [];
 	
 	/* make the script work in the context of a webview */
-	var console = window.console || (window.console={log:function(){},warn:function(){},error:function(){}});
-	console.unsafeLog = console.log;
-	console.log = function() {
-		try {
-			this.unsafeLog.apply(this,arguments);
-		} catch(ex) {
-			// ignore
-		}
-	};
+	try {
+		var console = window.console || (window.console={log:function(){},warn:function(){},error:function(){}});
+		console.unsafeLog = console.log;
+		console.log = function() {
+			try {
+				this.unsafeLog.apply(this,arguments);
+			} catch(ex) {
+				// ignore
+			}
+		};
+	} catch (ex) {
+		// we tried...
+	}
 	
 }();
 
@@ -164,7 +168,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 	INSTRUMENTATION_RESULTS_TSV = convertToTSV(INSTRUMENTATION_RESULTS);
 	
 	var tsvString = INSTRUMENTATION_RESULTS_TSV.map((row) => (row.join('\t'))).join('\n');
-	console.log(tsvString);
+	if(window.debugCSSUsage) console.log(tsvString);
 	
 	// Add it to the document dom
 	var output = document.createElement('script');
@@ -259,7 +263,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 void function() {
     
     // Don't run in subframes for now
-    if (window.self !== window.top) throw new Error("CSSUsage: the script doesn't run in frames for now");
+    if (top.location.href !== location.href) throw new Error("CSSUsage: the script doesn't run in frames for now");
     
     // Don't run if already ran
     if (window.CSSUsage) throw new Error("CSSUsage: only one run will be executed; check the right version was chosen");
@@ -1117,15 +1121,15 @@ void function() {
         var cssUniqueLonelyClassGatesArray = Object.keys(cssLonelyClassGates);
         var cssUniqueLonelyClassGatesUsedArray = cssUniqueLonelyClassGatesArray.filter((c) => domClasses[c]);
         var cssUniqueLonelyClassGatesUsedWorthArray = cssUniqueLonelyClassGatesUsedArray.filter((c)=>(cssLonelyClassGates[c]>9));
-        console.log(cssLonelyClassGates);
-        console.log(cssUniqueLonelyClassGatesUsedWorthArray);
+        if(window.debugCSSUsage) console.log(cssLonelyClassGates);
+        if(window.debugCSSUsage) console.log(cssUniqueLonelyClassGatesUsedWorthArray);
 
         // get arrays of the #id gates used ({"hover":5} => ["hover"]), filter irrelevant entries
         var cssUniqueLonelyIdGatesArray = Object.keys(cssLonelyIdGates);
         var cssUniqueLonelyIdGatesUsedArray = cssUniqueLonelyIdGatesArray.filter((c) => domIds[c]);
         var cssUniqueLonelyIdGatesUsedWorthArray = cssUniqueLonelyIdGatesUsedArray.filter((c)=>(cssLonelyIdGates[c]>9));
-        console.log(cssLonelyIdGates);
-        console.log(cssUniqueLonelyIdGatesUsedWorthArray);
+        if(window.debugCSSUsage) console.log(cssLonelyIdGates);
+        if(window.debugCSSUsage) console.log(cssUniqueLonelyIdGatesUsedWorthArray);
         
         //
         // report how many times the classes in the following arrays have been used in the dom
@@ -1361,7 +1365,7 @@ void function() {
             
         };
         
-        console.log(CSSUsageResults.usages = results);
+        if(window.debugCSSUsage) console.log(CSSUsageResults.usages = results);
         
     }
         
@@ -1418,7 +1422,7 @@ void function() {
         CSSUsageResults.duration = (performance.now() - startTime)|0;
 
         // DO SOMETHING WITH THE CSS OBJECT HERE
-        console.log(CSSUsageResults);
+        if(window.debugCSSUsage) console.log(CSSUsageResults);
         if(window.onCSSUsageResults) {
             window.onCSSUsageResults(CSSUsageResults);
         };
