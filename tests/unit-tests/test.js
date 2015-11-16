@@ -63,6 +63,9 @@ describe('Shorthand & Complex Values', function() {
 	it('background: lime url(")...\\\\\\"\\\\\\...(") repeat', function() {
 		chai.assert.equal('lime,url,repeat', CSSUsage.CSSValues.createValueArray('lime url(")...\\\\\\"\\\\\\...(") repeat','background').join(','));
 	});
+	it('background-image: -webkit-gradient(linear, left bottom, left top, from(#5AE), to(#036))', function() {
+		chai.assert.equal('-webkit-gradient', CSSUsage.CSSValues.createValueArray('-webkit-gradient(linear, left bottom, left top, from(#5AE), to(#036))','background-image').join(','));
+	});
 	it('margin-left: calc(-1 * (100% - 15px))', function() {
 		chai.assert.equal('calc', CSSUsage.CSSValues.createValueArray('calc(-1 * (100% - 15px))','margin-left').join(','));
 	});
