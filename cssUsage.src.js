@@ -650,11 +650,6 @@ void function() {
         
         // Normalize letter-casing
         value = value.toLowerCase();
-
-        // Remove (...)
-        if (value.indexOf("(") != -1) {
-            value = value.replace(/[(]([^()]+|[(]([^()]+)[)])+[)]/g, "");
-        }
         
         // Do the right thing in function of the property
         switch(propertyName) {
@@ -671,16 +666,30 @@ void function() {
                 
             case '--var':
             
-                // Group {...} and [...]
-                value = value.replace(/\[([^\[\]]+|\[[^\[\]]+\])+\]/g, "[...]");
-                value = value.replace(/\{([^\{\}]+|\{[^\{\}]+\})+\}/g, "{...}");
+				// Replace strings by dummies
+				value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
+                value = value.replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,'"..."');
+				
+                // Remove group contents (...), {...} and [...]
+				value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
+				value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, "{...}");
+				value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, "[...]");
+				
                 break;
+				
+			default:
+			
+				// Replace strings by dummies
+				value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
+							 .replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,'"..."');
+				
+				// Remove (...)
+				if (value.indexOf("(") != -1) {
+					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
+				}
                 
         }
         
-        // Replace strings by dummies
-        value = value.replace(/"([^"]|\\")*"/g,'"..."')
-                     .replace(/'([^']|\\')*'/g,'"..."');
         
         // Divide at commas and spaces to separate different values
         value = value.split(/\s*,\s*|\s+/g);
