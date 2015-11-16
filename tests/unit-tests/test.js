@@ -60,6 +60,12 @@ describe('Shorthand & Complex Values', function() {
     it('box-shadow: initial testing of comma seperated vals', function() {
         chai.assert.equal('3px,blue,1em,red', CSSUsage.CSSValues.createValueArray('3px blue , 1em red','box-shadow').join(','));
     });
+	it('background: lime url(")...\\\\\\"\\\\\\...(") repeat', function() {
+		chai.assert.equal('lime,url,repeat', CSSUsage.CSSValues.createValueArray('lime url(")...\\\\\\"\\\\\\...(") repeat','background').join(','));
+	});
+	it('margin-left: calc(-1 * (100% - 15px))', function() {
+		chai.assert.equal('calc', CSSUsage.CSSValues.createValueArray('calc(-1 * (100% - 15px))','margin-left').join(','));
+	});
 });
 
 // Function Notation
