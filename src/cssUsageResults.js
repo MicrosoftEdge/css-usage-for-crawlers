@@ -38,6 +38,15 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 	INSTRUMENTATION_RESULTS.css = CSSUsageResults;
 	INSTRUMENTATION_RESULTS_TSV = convertToTSV(INSTRUMENTATION_RESULTS);
 	
+	// Remove tabs and new lines from the data
+	for(var i = INSTRUMENTATION_RESULTS_TSV.length; i--;) {
+		var row = INSTRUMENTATION_RESULTS_TSV[i];
+		for(var j = row.length; j--;) {
+			row[j] = (''+row[j]).replace(/(\s|\r|\n)+/g, ' ');
+		}
+	}
+	
+	// Convert into one signle tsv file
 	var tsvString = INSTRUMENTATION_RESULTS_TSV.map((row) => (row.join('\t'))).join('\n');
 	if(window.debugCSSUsage) console.log(tsvString);
 	

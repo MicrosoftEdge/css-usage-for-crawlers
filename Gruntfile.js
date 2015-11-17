@@ -7,6 +7,7 @@ module.exports = function(grunt) {
         src: {
             src: [
               //'src/cssParser.js',
+			  'src/lodash.js',
 			  'src/cssShorthands.js',
               'src/cssUsageResults.js',
               'src/cssUsage.js',
@@ -28,6 +29,7 @@ module.exports = function(grunt) {
         }
     },
     uglify: {
+      options: { maxLineLen: 0 },
       dist: {
         files: {
           'cssUsage.min.js': ['cssUsage.min.js']
