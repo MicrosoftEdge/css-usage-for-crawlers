@@ -304,7 +304,7 @@ void function() {
             "background-color": {
                 count: 10,
                 values: {
-                    "color": 9,
+                    "namedcolor": 9,
                     "inherit": 1
                 }
             }
@@ -593,7 +593,7 @@ void function() {
         // Map colors to a standard value (eg: white, blue, yellow)
         value = value.replace(/[#][0-9a-fA-F]+/g, '#000');
         if (isKeywordColor(value)) {
-           return "color"; 
+           return "namedcolor"; 
         }
         
         // Remove any digits eg: 55px -> px, 1.5 -> 0.0, 1 -> 0
@@ -666,27 +666,27 @@ void function() {
                 
             case '--var':
             
-				// Replace strings by dummies
-				value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
+                // Replace strings by dummies
+                value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
                 value = value.replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,'"..."');
-				
+                
                 // Remove group contents (...), {...} and [...]
-				value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
-				value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, "{...}");
-				value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, "[...]");
-				
+                value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
+                value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, "{...}");
+                value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, "[...]");
+                
                 break;
-				
-			default:
-			
-				// Replace strings by dummies
-				value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
-							 .replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,'"..."');
-				
-				// Remove (...)
-				if (value.indexOf("(") != -1) {
-					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
-				}
+                
+            default:
+            
+                // Replace strings by dummies
+                value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
+                             .replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,'"..."');
+                
+                // Remove (...)
+                if (value.indexOf("(") != -1) {
+                    value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
+                }
                 
         }
         
@@ -720,6 +720,7 @@ void function() {
     CSSUsage.PropertyValuesAnalyzer = analyzeStyleOfRule;
     CSSUsage.PropertyValuesAnalyzer.cleanSelectorText = cleanSelectorText;
     CSSUsage.PropertyValuesAnalyzer.generalizedSelectorsOf = generalizedSelectorsOf;
+    CSSUsage.PropertyValuesAnalyzer.finalize = finalize;
 
     // We put a computed style in cache for filtering purposes
     var defaultStyle = getComputedStyle(document.createElement('div'));
@@ -754,13 +755,13 @@ void function() {
         generalizedSelectorsData.forEach((generalizedSelectorData) => {
             generalizedSelectorData.count++
         })
-		
-		// avoid most common browser lies
-		var cssText = ' '+style.cssText; 
-		if(navigator.userAgent.indexOf('Edge')>=0) {
-			cssText = cssText.replace(/border: medium; border-image: none;/i,'border: none;');
-			cssText = cssText.replace(/ border-image: none;/i,'');
-		}
+        
+        // avoid most common browser lies
+        var cssText = ' '+style.cssText; 
+        if(navigator.userAgent.indexOf('Edge')>=0) {
+            cssText = cssText.replace(/border: medium; border-image: none;/i,'border: none;');
+            cssText = cssText.replace(/ border-image: none;/i,'');
+        }
 
         
         // For each property declaration in this rule, we collect some stats
@@ -774,83 +775,83 @@ void function() {
             // We need to make sure we're only checking string props
             var isValueInvalid = () => (typeof styleValue !== 'string' && styleValue != "" && styleValue != undefined);
             var isPropertyUndefined = () => (((' '+cssText).indexOf(' '+key+':') == -1) && (styleValue=='initial' || !valueExistsInRootProperty(key, styleValue)));
-			var getBuggyValuesForThisBrowser = function() {
-				var buggyValues = getBuggyValuesForThisBrowser.cache;
-				if(buggyValues) { return buggyValues; }
-				else { buggyValues = {}; }
-				
-				// Edge reports initial value instead of "initial", we have to be cautious
-				if(navigator.userAgent.indexOf('Edge')>=0) {
+            var getBuggyValuesForThisBrowser = function() {
+                var buggyValues = getBuggyValuesForThisBrowser.cache;
+                if(buggyValues) { return buggyValues; }
+                else { buggyValues = {}; }
+                
+                // Edge reports initial value instead of "initial", we have to be cautious
+                if(navigator.userAgent.indexOf('Edge')>=0) {
 
-					buggyValues['*'] = 1; // make 0 values automatic for longhand properties
-					
-					//buggyValues['list-style-position:outside'] = 0;
-					buggyValues['list-style-image:none'] = 1;
-					//buggyValues['outline-color:invert'] = 0;
-					//buggyValues['outline-style:none'] = 0;
-					//buggyValues['outline-width:medium'] = 0;
-					//buggyValues['background-image:none'] = 0;
-					//buggyValues['background-attachment:scroll'] = 0;
-					//buggyValues['background-repeat:repeat'] = 0;
-					//buggyValues['background-repeat-x:repeat'] = 0;
-					//buggyValues['background-repeat-y:repeat'] = 0;
-					//buggyValues['background-position-x:0%'] = 0;
-					//buggyValues['background-position-y:0%'] = 0;
-					//buggyValues['background-size:auto'] = 0;
-					//buggyValues['background-origin:padding-box'] = 0;
-					//buggyValues['background-clip:border-box'] = 0;
-					//buggyValues['background-color:transparent'] = 0;
-					buggyValues['border-top-color:currentcolor'] = 1;
-					buggyValues['border-right-color:currentcolor'] = 1;
-					buggyValues['border-bottom-color:currentcolor'] = 1;
-					buggyValues['border-left-color:currentcolor'] = 1;
-					//buggyValues['border-top-style:solid'] = 0;
-					//buggyValues['border-right-style:solid'] = 0;
-					//buggyValues['border-bottom-style:solid'] = 0;
-					//buggyValues['border-left-style:solid'] = 0;
-					buggyValues['border-top-width:medium'] = 1;
-					buggyValues['border-right-width:medium'] = 1;
-					buggyValues['border-bottom-width:medium'] = 1;
-					buggyValues['border-left-width:medium'] = 1;
-					buggyValues['border-image-source:none'] = 1;
-					buggyValues['border-image-outset:0'] = 1;
-					buggyValues['border-image-width:1'] = 1;
-					buggyValues['border-image-repeat:repeat'] = 1;
-					buggyValues['border-image-repeat-x:repeat'] = 1;
-					buggyValues['border-image-repeat-y:repeat'] = 1;
-					buggyValues['line-height:normal'] = 1;
-					//buggyValues['font-size-adjust:none'] = 0;
-					buggyValues['font-stretch:normal'] = 1;
-					
-				}
-				
-				// Firefox reports initial values instead of "initial", we have to be cautious
-				if(navigator.userAgent.indexOf('Firefox')>=0) {
-					
-					buggyValues['*'] = 1; // make 0 values automatic for longhand properties
-					
-				}
-				
-				return getBuggyValuesForThisBrowser.cache = buggyValues;
+                    buggyValues['*'] = 1; // make 0 values automatic for longhand properties
+                    
+                    //buggyValues['list-style-position:outside'] = 0;
+                    buggyValues['list-style-image:none'] = 1;
+                    //buggyValues['outline-color:invert'] = 0;
+                    //buggyValues['outline-style:none'] = 0;
+                    //buggyValues['outline-width:medium'] = 0;
+                    //buggyValues['background-image:none'] = 0;
+                    //buggyValues['background-attachment:scroll'] = 0;
+                    //buggyValues['background-repeat:repeat'] = 0;
+                    //buggyValues['background-repeat-x:repeat'] = 0;
+                    //buggyValues['background-repeat-y:repeat'] = 0;
+                    //buggyValues['background-position-x:0%'] = 0;
+                    //buggyValues['background-position-y:0%'] = 0;
+                    //buggyValues['background-size:auto'] = 0;
+                    //buggyValues['background-origin:padding-box'] = 0;
+                    //buggyValues['background-clip:border-box'] = 0;
+                    //buggyValues['background-color:transparent'] = 0;
+                    buggyValues['border-top-color:currentcolor'] = 1;
+                    buggyValues['border-right-color:currentcolor'] = 1;
+                    buggyValues['border-bottom-color:currentcolor'] = 1;
+                    buggyValues['border-left-color:currentcolor'] = 1;
+                    //buggyValues['border-top-style:solid'] = 0;
+                    //buggyValues['border-right-style:solid'] = 0;
+                    //buggyValues['border-bottom-style:solid'] = 0;
+                    //buggyValues['border-left-style:solid'] = 0;
+                    buggyValues['border-top-width:medium'] = 1;
+                    buggyValues['border-right-width:medium'] = 1;
+                    buggyValues['border-bottom-width:medium'] = 1;
+                    buggyValues['border-left-width:medium'] = 1;
+                    buggyValues['border-image-source:none'] = 1;
+                    buggyValues['border-image-outset:0'] = 1;
+                    buggyValues['border-image-width:1'] = 1;
+                    buggyValues['border-image-repeat:repeat'] = 1;
+                    buggyValues['border-image-repeat-x:repeat'] = 1;
+                    buggyValues['border-image-repeat-y:repeat'] = 1;
+                    buggyValues['line-height:normal'] = 1;
+                    //buggyValues['font-size-adjust:none'] = 0;
+                    buggyValues['font-stretch:normal'] = 1;
+                    
+                }
+                
+                // Firefox reports initial values instead of "initial", we have to be cautious
+                if(navigator.userAgent.indexOf('Firefox')>=0) {
+                    
+                    buggyValues['*'] = 1; // make 0 values automatic for longhand properties
+                    
+                }
+                
+                return getBuggyValuesForThisBrowser.cache = buggyValues;
 
-			};
+            };
             var valueExistsInRootProperty = (key,value) => { 
-				value = value.trim();
-				
-				// detect suspicious values
-				var buggyValues = getBuggyValuesForThisBrowser();
-				
-				// apply common sense to the given value, per browser
-				var buggyState = buggyValues[(key+':'+value).toLowerCase()];
-				if(buggyState === 1) { return false; }
-				if(buggyState !== 0 && (!buggyValues['*'] || CSSShorthands.unexpand(key).length == 0)) { return true; }
-								
+                value = value.trim();
+                
+                // detect suspicious values
+                var buggyValues = getBuggyValuesForThisBrowser();
+                
+                // apply common sense to the given value, per browser
+                var buggyState = buggyValues[(key+':'+value).toLowerCase()];
+                if(buggyState === 1) { return false; }
+                if(buggyState !== 0 && (!buggyValues['*'] || CSSShorthands.unexpand(key).length == 0)) { return true; }
+                                
                 // ask the browser is the best we can do right now
                 var rootKey = key.split("-")[0]; if(key==rootKey) return false;
                 var values = value.split(/\s+|\s*,\s*/g);
                 var result = values.every((value) => (new RegExp(' '+rootKey+'(?:[-][-_a-zA-Z0-9]+)?[:][^;]*'+value.trim().replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1"),'gi')).test(cssText));
                 return result;
-				
+                
             };
             
             if (isValueInvalid() || isPropertyUndefined()) {
@@ -919,6 +920,30 @@ void function() {
             
         }
     }
+    
+    function finalize() {
+        
+        // anonymize identifiers used for animation-name
+        function removeAnimationNames() {
+            
+            // anonymize identifiers used for animation-name globally
+            if(CSSUsageResults.props["animation-name"]) {
+                CSSUsageResults.props["animation-name"].values = {"iden":CSSUsageResults.props["animation-name"].count};
+            }
+            
+            // anonymize identifiers used for animation-name per selector
+            for(var selector in CSSUsageResults.rules) { 
+				var rule = CSSUsageResults.rules[selector];
+                if(rule && rule.props && rule.props["animation-name"]) {
+                    rule.props["animation-name"].values = {"iden":rule.props["animation-name"].count};
+                }
+            }
+            
+        }
+        
+        removeAnimationNames();
+        
+    }
 
     //-------------------------------------------------------------------------
 
@@ -937,7 +962,7 @@ void function() {
     }
     
     /**
-     * Returns an anonimized version of the selector.
+     * Returns an anonymized version of the selector.
      * @example "#menu.open:hover>a.submenu" => "#id.class:hover > a.class"
      */
     function generalizedSelectorsOf(value) {
@@ -1410,9 +1435,9 @@ void function() {
         // Prevent this code from running multiple times
         var firstTime = !onready.hasAlreadyRun; onready.hasAlreadyRun = true;
         if(!firstTime) { return; /* for now... */ }
-		
-		// Prevent this code from running when the page has no stylesheet (probably a redirect page)
-		if(document.styleSheets.length == 0) { return; }
+        
+        // Prevent this code from running when the page has no stylesheet (probably a redirect page)
+        if(document.styleSheets.length == 0) { return; }
 
         // Keep track of duration
         var startTime = performance.now();
@@ -1425,6 +1450,7 @@ void function() {
         // perform analysis
         CSSUsage.StyleWalker.walkOverDomElements();
         CSSUsage.StyleWalker.walkOverCssStyles();
+        CSSUsage.PropertyValuesAnalyzer.finalize();
         CSSUsage.SelectorAnalyzer.finalize();
 
         // Update duration
