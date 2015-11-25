@@ -197,12 +197,17 @@ void function() { try {
 				var selectorText;
 				var matchedElements; 
 				if(rule.selectorText) {
-					selectorText = rule.selectorText;
-					if(parentMatchedElements) {
-						matchedElements = [].slice.call(document.querySelectorAll(selectorText));
-						matchedElements.parentMatchedElements = parentMatchedElements;
-					} else {
-						matchedElements = [].slice.call(document.querySelectorAll(selectorText));
+					selectorText = CSSUsage.PropertyValuesAnalyzer.cleanSelectorText(rule.selectorText);
+					try {
+						if(parentMatchedElements) {
+							matchedElements = [].slice.call(document.querySelectorAll(selectorText));
+							matchedElements.parentMatchedElements = parentMatchedElements;
+						} else {
+							matchedElements = [].slice.call(document.querySelectorAll(selectorText));
+						}
+					} catch(ex) {
+						matchedElements = [];
+						console.warn(ex.stack);
 					}
 				} else {
 					selectorText = '@atrule:'+rule.type;
@@ -710,7 +715,7 @@ void function() { try {
 			if(text.indexOf(':') == -1) {
 				return text;
 			} else {
-				return text.replace(/([-_a-zA-Z0-9*]?):(?:hover|active|focus|before|after)|::(?:before|after)*/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([*a-zA-Z]?)<</g,'$1');
+				return text.replace(/([-_a-zA-Z0-9*]?):(?:hover|active|focus|before|after)|::(?:before|after)*/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([-_a-zA-Z0-9*]?)<</g,'$1');
 			}
 		}
 		
