@@ -38,6 +38,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 	// Collect the results (css)
 	INSTRUMENTATION_RESULTS.css = CSSUsageResults;
 	
+	/*
 	// Collect the results (scripts)
 	INSTRUMENTATION_RESULTS.scripts = {};
 	for(var i = document.scripts.length; i--;) { 
@@ -50,6 +51,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 			INSTRUMENTATION_RESULTS.scripts[surl] = 1;
 		}
 	}
+	*/
 	
 	// Convert it to a more efficient format
 	INSTRUMENTATION_RESULTS_TSV = convertToTSV(INSTRUMENTATION_RESULTS);

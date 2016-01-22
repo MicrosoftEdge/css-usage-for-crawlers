@@ -12468,7 +12468,8 @@ void function() {
 		URL: location.href,
 		TIMESTAMP: Date.now(),
 		css: {/*  see CSSUsageResults  */},
-		dom: {}
+		dom: {},
+		scripts: {/* "bootstrap.js": 1 */},
 	};
 	window.INSTRUMENTATION_RESULTS_TSV = [];
 	
@@ -12491,8 +12492,25 @@ void function() {
 
 window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 
-	// Convert it to a more efficient format
+	// Collect the results (css)
 	INSTRUMENTATION_RESULTS.css = CSSUsageResults;
+	
+	/*
+	// Collect the results (scripts)
+	INSTRUMENTATION_RESULTS.scripts = {};
+	for(var i = document.scripts.length; i--;) { 
+		var s = document.scripts[i]; if(s.src) {
+			// get and simplify the script url
+			var surl = s.src.replace(/^(.*)[/]([^/?#]+)[/]?([?#].*)?$/gi,'$2');
+			surl = surl.replace(/([.]min)?([.]js)/gi,'');
+			surl = surl.substr(0, 20);
+			// save it
+			INSTRUMENTATION_RESULTS.scripts[surl] = 1;
+		}
+	}
+	*/
+	
+	// Convert it to a more efficient format
 	INSTRUMENTATION_RESULTS_TSV = convertToTSV(INSTRUMENTATION_RESULTS);
 	
 	// Remove tabs and new lines from the data
@@ -12533,6 +12551,10 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 		
 		currentRowTemplate.push('dom');
 		convertToTSV(INSTRUMENTATION_RESULTS['dom']);
+		currentRowTemplate.pop();
+		
+		currentRowTemplate.push('scripts');
+		convertToTSV(INSTRUMENTATION_RESULTS['scripts']);
 		currentRowTemplate.pop();
 		
 		var l = finishedRows[0].length;
@@ -12793,12 +12815,17 @@ void function() { try {
 				var selectorText;
 				var matchedElements; 
 				if(rule.selectorText) {
-					selectorText = rule.selectorText;
-					if(parentMatchedElements) {
-						matchedElements = [].slice.call(document.querySelectorAll(selectorText));
-						matchedElements.parentMatchedElements = parentMatchedElements;
-					} else {
-						matchedElements = [].slice.call(document.querySelectorAll(selectorText));
+					selectorText = CSSUsage.PropertyValuesAnalyzer.cleanSelectorText(rule.selectorText);
+					try {
+						if(parentMatchedElements) {
+							matchedElements = [].slice.call(document.querySelectorAll(selectorText));
+							matchedElements.parentMatchedElements = parentMatchedElements;
+						} else {
+							matchedElements = [].slice.call(document.querySelectorAll(selectorText));
+						}
+					} catch(ex) {
+						matchedElements = [];
+						console.warn(ex.stack);
 					}
 				} else {
 					selectorText = '@atrule:'+rule.type;
@@ -13306,7 +13333,7 @@ void function() { try {
 			if(text.indexOf(':') == -1) {
 				return text;
 			} else {
-				return text.replace(/([-_a-zA-Z0-9*]?):(?:hover|active|focus|before|after)|::(?:before|after)*/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([*a-zA-Z]?)<</g,'$1');
+				return text.replace(/([-_a-zA-Z0-9*]?):(?:hover|active|focus|before|after)|::(?:before|after)*/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([-_a-zA-Z0-9*]?)<</g,'$1');
 			}
 		}
 		
