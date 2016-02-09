@@ -8,6 +8,7 @@ module.exports = function(grunt) {
             src: [
               //'src/cssParser.js',
 			  'src/lodash.js',
+			  'src/gzip.js',
 			  'src/cssShorthands.js',
               'src/cssUsageResults.js',
               'src/cssUsage.js',

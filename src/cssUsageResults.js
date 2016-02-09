@@ -83,7 +83,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 	// Add it to the document dom
 	var output = document.createElement('script');
 	output.id = "css-usage-tsv-results";
-	output.textContent = tsvString;
+	output.textContent = pako.deflate(tsvString, { to: 'string' });
     output.type = 'text/plain';
     document.querySelector('head').appendChild(output);
 
