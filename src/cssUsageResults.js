@@ -3,11 +3,23 @@
 //
 void function() {
 	
+	/*	String hash function
+	/*	credits goes to http://erlycoder.com/49/javascript-hash-functions-to-convert-string-into-integer-hash- */
+	const hashCodeOf = (str) => {
+		var hash = 5381; var char = 0;
+		for (var i = 0; i < str.length; i++) {
+			char = str.charCodeAt(i);
+			hash = ((hash << 5) + hash) + char;
+		}
+		return hash;
+	}
+	
 	var ua = navigator.userAgent;
 	var uaName = ua.indexOf('Edge')>=0 ? 'EDGE' :ua.indexOf('Chrome')>=0 ? 'CHROME' : 'FIREFOX';
 	window.INSTRUMENTATION_RESULTS = {
 		UA: uaName,
 		UASTRING: ua,
+		UASTRING_HASH: hashCodeOf(ua),
 		URL: location.href,
 		TIMESTAMP: Date.now(),
 		css: {/*  see CSSUsageResults  */},
@@ -82,11 +94,15 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 		var finishedRows = [];
 		var currentRowTemplate = [
 			INSTRUMENTATION_RESULTS.UA,
-			INSTRUMENTATION_RESULTS.UASTRING,
+			INSTRUMENTATION_RESULTS.UASTRING_HASH,
 			INSTRUMENTATION_RESULTS.URL,
 			INSTRUMENTATION_RESULTS.TIMESTAMP,
 			0
 		];
+		
+		currentRowTemplate.push('ua');
+		convertToTSV({identifier: INSTRUMENTATION_RESULTS.UASTRING});
+		currentRowTemplate.pop();
 		
 		currentRowTemplate.push('css');
 		convertToTSV(INSTRUMENTATION_RESULTS['css']);
@@ -96,9 +112,9 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 		convertToTSV(INSTRUMENTATION_RESULTS['dom']);
 		currentRowTemplate.pop();
 		
-		currentRowTemplate.push('scripts');
-		convertToTSV(INSTRUMENTATION_RESULTS['scripts']);
-		currentRowTemplate.pop();
+		//currentRowTemplate.push('scripts');
+		//convertToTSV(INSTRUMENTATION_RESULTS['scripts']);
+		//currentRowTemplate.pop();
 		
 		var l = finishedRows[0].length;
 		finishedRows.sort((a,b) => {

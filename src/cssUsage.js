@@ -2,7 +2,6 @@ void function() { try {
 	
 	var _ = window.CSSUsageLodash;
 	var map = _.map.bind(_);
-	var forEach = _.forEach.bind(_);
 	var reduce = _.reduce.bind(_);
 	var filter = _.filter.bind(_);
 	
@@ -15,7 +14,7 @@ void function() { try {
 		if (top.location.href !== location.href) throw new Error("CSSUsage: the script doesn't run in frames for now");
 		
 		// Don't run if already ran
-		if (window.CSSUsage) throw new Error("CSSUsage: only one run will be executed; check the right version was chosen");
+		if (window.CSSUsage) throw new Error("CSSUsage: second execution attempted; only one run can be executed; if you specified parameters, check the right ones were chosen");
 		
 		// Don't run if we don't have lodash
 		if (!window.CSSUsageLodash) throw new Error("CSSUsage: missing CSSUsageLodash dependency");
@@ -207,7 +206,7 @@ void function() { try {
 						}
 					} catch(ex) {
 						matchedElements = [];
-						console.warn(ex.stack);
+						console.warn(ex.stack||("Invalid selector: "+selectorText+" -- via "+rule.selectorText));
 					}
 				} else {
 					selectorText = '@atrule:'+rule.type;
@@ -267,9 +266,9 @@ void function() { try {
 			}
 			
 			// Run all rule analyzers
-			CSSUsage.StyleWalker.ruleAnalyzers.forEach(function(runAnalyzer) {
+			for(var runAnalyzer of CSSUsage.StyleWalker.ruleAnalyzers) {
 				runAnalyzer(style, selectorText, matchedElements, type, isInline);
-			});
+			}
 			
 		}
 		
@@ -277,9 +276,9 @@ void function() { try {
 		 * Given an element and its data, send it to all element analyzers
 		 */
 		function runElementAnalyzers(element, index, depth) {
-			CSSUsage.StyleWalker.elementAnalyzers.forEach(function(runAnalyzer) {
+			for(var runAnalyzer of CSSUsage.StyleWalker.elementAnalyzers) {
 				runAnalyzer(element,index,depth);
-			});
+			}
 		}
 		
 		/**
@@ -318,13 +317,13 @@ void function() { try {
 			// Parse values like: width 1s height 5s time 2s
 			if (Array.isArray(value)) {
 
-				value.forEach(function(val) {
+				for(var val of value) {
 					// We need to trim again as fonts at times will
 					// be Font, Font2, Font3 and so we need to trim
 					// the ones next to the commas
 					val = val.trim();
 					values.push(val);
-				});
+				}
 
 			}
 			// Put the single value into an array so we get all values
@@ -481,6 +480,89 @@ void function() { try {
 
 		// We put a computed style in cache for filtering purposes
 		var defaultStyle = getComputedStyle(document.createElement('div'));
+		// As well as some basic lies
+		var getBuggyValuesForThisBrowser = function() {
+			var buggyValues = getBuggyValuesForThisBrowser.cache;
+			if(buggyValues) { return buggyValues; }
+			else { buggyValues = Object.create(null); }
+			
+			// Edge reports initial value instead of "initial", we have to be cautious
+			if(navigator.userAgent.indexOf('Edge')>=0) {
+
+				buggyValues['*'] = 1; // make 0 values automatic for longhand properties
+				
+				//buggyValues['list-style-position:outside'] = 0;
+				buggyValues['list-style-image:none'] = 1;
+				//buggyValues['outline-color:invert'] = 0;
+				//buggyValues['outline-style:none'] = 0;
+				//buggyValues['outline-width:medium'] = 0;
+				//buggyValues['background-image:none'] = 0;
+				//buggyValues['background-attachment:scroll'] = 0;
+				//buggyValues['background-repeat:repeat'] = 0;
+				//buggyValues['background-repeat-x:repeat'] = 0;
+				//buggyValues['background-repeat-y:repeat'] = 0;
+				//buggyValues['background-position-x:0%'] = 0;
+				//buggyValues['background-position-y:0%'] = 0;
+				//buggyValues['background-size:auto'] = 0;
+				//buggyValues['background-origin:padding-box'] = 0;
+				//buggyValues['background-clip:border-box'] = 0;
+				//buggyValues['background-color:transparent'] = 0;
+				buggyValues['border-top-color:currentcolor'] = 1;
+				buggyValues['border-right-color:currentcolor'] = 1;
+				buggyValues['border-bottom-color:currentcolor'] = 1;
+				buggyValues['border-left-color:currentcolor'] = 1;
+				//buggyValues['border-top-style:solid'] = 0;
+				//buggyValues['border-right-style:solid'] = 0;
+				//buggyValues['border-bottom-style:solid'] = 0;
+				//buggyValues['border-left-style:solid'] = 0;
+				buggyValues['border-top-width:medium'] = 1;
+				buggyValues['border-right-width:medium'] = 1;
+				buggyValues['border-bottom-width:medium'] = 1;
+				buggyValues['border-left-width:medium'] = 1;
+				buggyValues['border-image-source:none'] = 1;
+				buggyValues['border-image-outset:0'] = 1;
+				buggyValues['border-image-width:1'] = 1;
+				buggyValues['border-image-repeat:repeat'] = 1;
+				buggyValues['border-image-repeat-x:repeat'] = 1;
+				buggyValues['border-image-repeat-y:repeat'] = 1;
+				buggyValues['line-height:normal'] = 1;
+				//buggyValues['font-size-adjust:none'] = 0;
+				buggyValues['font-stretch:normal'] = 1;
+				
+			}
+			
+			// Firefox reports initial values instead of "initial", we have to be cautious
+			if(navigator.userAgent.indexOf('Firefox')>=0) {
+				
+				buggyValues['*'] = 1; // make 0 values automatic for longhand properties
+				
+			}
+			
+			// Attempt to force to optimize the object somehow
+			Object.create(buggyValues);
+			
+			return getBuggyValuesForThisBrowser.cache = buggyValues;
+
+		};
+		var valueExistsInRootProperty = (cssText,key,value) => {
+			value = value.trim();
+			
+			// detect suspicious values
+			var buggyValues = getBuggyValuesForThisBrowser();
+			
+			// apply common sense to the given value, per browser
+			var buggyState = buggyValues[(key+':'+value).toLowerCase()];
+			if(buggyState === 1) { return false; }
+			if(buggyState !== 0 && (!buggyValues['*'] || CSSShorthands.unexpand(key).length == 0)) { return true; }
+							
+			// ask the browser is the best we can do right now
+			var rootKey = key.split("-")[0]; if(key==rootKey) return false;
+			var values = value.split(/\s+|\s*,\s*/g);
+			// TODO: better to extract all the values, then see if any of them contains what we are looking for using simple indexOf...
+			var result = values.every((value) => (new RegExp(' '+rootKey+'(?:[-][-_a-zA-Z0-9]+)?[:][^;]*'+value.trim().replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1"),'gi')).test(cssText));
+			return result;
+			
+		};
 		
 		/** This will loop over the styles declarations */
 		function analyzeStyleOfRule(style, selectorText, matchedElements, type, isInline) { isInline=!!isInline;
@@ -509,9 +591,9 @@ void function() { try {
 			));
 			
 			// Increment the occurence counter of found generalized selectors
-			generalizedSelectorsData.forEach((generalizedSelectorData) => {
+			for(var generalizedSelectorData of generalizedSelectorsData) {
 				generalizedSelectorData.count++
-			})
+			}
 			
 			// avoid most common browser lies
 			var cssText = ' '+style.cssText; 
@@ -519,8 +601,7 @@ void function() { try {
 				cssText = cssText.replace(/border: medium; border-image: none;/i,'border: none;');
 				cssText = cssText.replace(/ border-image: none;/i,'');
 			}
-
-			
+						
 			// For each property declaration in this rule, we collect some stats
 			for (var i = style.length; i--;) {
 
@@ -531,85 +612,7 @@ void function() { try {
 				// Only keep styles that were declared by the author
 				// We need to make sure we're only checking string props
 				var isValueInvalid = () => (typeof styleValue !== 'string' && styleValue != "" && styleValue != undefined);
-				var isPropertyUndefined = () => (((' '+cssText).indexOf(' '+key+':') == -1) && (styleValue=='initial' || !valueExistsInRootProperty(key, styleValue)));
-				var getBuggyValuesForThisBrowser = function() {
-					var buggyValues = getBuggyValuesForThisBrowser.cache;
-					if(buggyValues) { return buggyValues; }
-					else { buggyValues = {}; }
-					
-					// Edge reports initial value instead of "initial", we have to be cautious
-					if(navigator.userAgent.indexOf('Edge')>=0) {
-
-						buggyValues['*'] = 1; // make 0 values automatic for longhand properties
-						
-						//buggyValues['list-style-position:outside'] = 0;
-						buggyValues['list-style-image:none'] = 1;
-						//buggyValues['outline-color:invert'] = 0;
-						//buggyValues['outline-style:none'] = 0;
-						//buggyValues['outline-width:medium'] = 0;
-						//buggyValues['background-image:none'] = 0;
-						//buggyValues['background-attachment:scroll'] = 0;
-						//buggyValues['background-repeat:repeat'] = 0;
-						//buggyValues['background-repeat-x:repeat'] = 0;
-						//buggyValues['background-repeat-y:repeat'] = 0;
-						//buggyValues['background-position-x:0%'] = 0;
-						//buggyValues['background-position-y:0%'] = 0;
-						//buggyValues['background-size:auto'] = 0;
-						//buggyValues['background-origin:padding-box'] = 0;
-						//buggyValues['background-clip:border-box'] = 0;
-						//buggyValues['background-color:transparent'] = 0;
-						buggyValues['border-top-color:currentcolor'] = 1;
-						buggyValues['border-right-color:currentcolor'] = 1;
-						buggyValues['border-bottom-color:currentcolor'] = 1;
-						buggyValues['border-left-color:currentcolor'] = 1;
-						//buggyValues['border-top-style:solid'] = 0;
-						//buggyValues['border-right-style:solid'] = 0;
-						//buggyValues['border-bottom-style:solid'] = 0;
-						//buggyValues['border-left-style:solid'] = 0;
-						buggyValues['border-top-width:medium'] = 1;
-						buggyValues['border-right-width:medium'] = 1;
-						buggyValues['border-bottom-width:medium'] = 1;
-						buggyValues['border-left-width:medium'] = 1;
-						buggyValues['border-image-source:none'] = 1;
-						buggyValues['border-image-outset:0'] = 1;
-						buggyValues['border-image-width:1'] = 1;
-						buggyValues['border-image-repeat:repeat'] = 1;
-						buggyValues['border-image-repeat-x:repeat'] = 1;
-						buggyValues['border-image-repeat-y:repeat'] = 1;
-						buggyValues['line-height:normal'] = 1;
-						//buggyValues['font-size-adjust:none'] = 0;
-						buggyValues['font-stretch:normal'] = 1;
-						
-					}
-					
-					// Firefox reports initial values instead of "initial", we have to be cautious
-					if(navigator.userAgent.indexOf('Firefox')>=0) {
-						
-						buggyValues['*'] = 1; // make 0 values automatic for longhand properties
-						
-					}
-					
-					return getBuggyValuesForThisBrowser.cache = buggyValues;
-
-				};
-				var valueExistsInRootProperty = (key,value) => { 
-					value = value.trim();
-					
-					// detect suspicious values
-					var buggyValues = getBuggyValuesForThisBrowser();
-					
-					// apply common sense to the given value, per browser
-					var buggyState = buggyValues[(key+':'+value).toLowerCase()];
-					if(buggyState === 1) { return false; }
-					if(buggyState !== 0 && (!buggyValues['*'] || CSSShorthands.unexpand(key).length == 0)) { return true; }
-									
-					// ask the browser is the best we can do right now
-					var rootKey = key.split("-")[0]; if(key==rootKey) return false;
-					var values = value.split(/\s+|\s*,\s*/g);
-					var result = values.every((value) => (new RegExp(' '+rootKey+'(?:[-][-_a-zA-Z0-9]+)?[:][^;]*'+value.trim().replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1"),'gi')).test(cssText));
-					return result;
-					
-				};
+				var isPropertyUndefined = () => (((' '+cssText).indexOf(' '+key+':') == -1) && (styleValue=='initial' || !valueExistsInRootProperty(cssText, key, styleValue)));
 				
 				if (isValueInvalid() || isPropertyUndefined()) {
 					continue;
@@ -624,7 +627,7 @@ void function() { try {
 				);
 				
 				// log the property usage per selector
-				generalizedSelectorsData.forEach((generalizedSelectorData) => {
+				for(var generalizedSelectorData of generalizedSelectorsData) {
 					
 					// get the datastore for current property
 					var propStats = generalizedSelectorData.props[normalizedKey] || (generalizedSelectorData.props[normalizedKey] = {count:0,values:{}});
@@ -633,14 +636,14 @@ void function() { try {
 					propStats.count++;
 					
 					// we also saw a bunch of values
-					values.forEach(function (value) {
+					for(var value of values) {
 						
 						// increment the counts for those by one, too
 						propStats.values[value] = (propStats.values[value]|0) + 1
 						
-					});
+					}
 					
-				});
+				}
 				
 				// if we may increment some counts due to this declaration
 				if(count > 0) {
@@ -650,29 +653,30 @@ void function() { try {
 					if (!propObject) {
 						propObject = CSSUsageResults.props[normalizedKey] = {
 							count: 0,
-							values: {}
+							values: Object.create(null)
 						};
 					}
 					
 					// update the occurence counts of the property and value
-					matchedElements.forEach(element => {
+					for(let element of matchedElements) {
 						
 						// check what the elements already contributed for this property
-						var knownValues = element['CSSUsage:'+normalizedKey] || (element['CSSUsage:'+normalizedKey] = []);
+						var cssUsageMeta = element.CSSUsage || (element.CSSUsage=Object.create(null));
+						var knownValues = cssUsageMeta[normalizedKey] || (cssUsageMeta[normalizedKey] = []);
 						
 						// increment the amount of affected elements which we didn't count yet
 						if(knownValues.length == 0) { propObject.count += 1; }
 
 						// add newly found values too
-						values.forEach(function (value) {
+						for(let value of values) {
 							
 							if(knownValues.indexOf(value) >= 0) { return; }
 							propObject.values[value] = (propObject.values[value]|0) + 1;
 							knownValues.push(value);
 
-						});
+						}
 						
-					});
+					}
 					
 				}
 				
@@ -715,7 +719,7 @@ void function() { try {
 			if(text.indexOf(':') == -1) {
 				return text;
 			} else {
-				return text.replace(/([-_a-zA-Z0-9*]?):(?:hover|active|focus|before|after)|::(?:before|after)*/g, '>>$1<<').replace(/^>><</g,'*').replace(/ >><</g,'*').replace(/>>([-_a-zA-Z0-9*]?)<</g,'$1');
+				return text.replace(/([-_a-zA-Z0-9*]?):(?:hover|active|focus|before|after|not\(:(hover|active|focus)\))|::(?:before|after)/gi, '>>$1<<').replace(/^>><</g,'*').replace(/\(>><<\)/g,'(*)').replace(/ >><</g,' *').replace(/>>([-_a-zA-Z0-9*]?)<</g,'$1');
 			}
 		}
 		
@@ -728,29 +732,29 @@ void function() { try {
 			// Trim
 			value = value.trim();
 			
+			// Collapse whitespace
+			if (value) {
+				value = value.replace(/\s+/g, " ");
+			}
+			
 			// Remove (...)
 			if (value.indexOf("(") != -1) {
 				value = value.replace(/[(]([^()]+|[(]([^()]+)[)])+[)]/g, "");
 			}
 			
-			// Remove whitespace
-			if (value.indexOf("(") != -1) {
-				value = value.replace(/\s+/g, " ");
-			}
-			
 			// Simplify [att]
 			if (value.indexOf("[") != -1) {
-				value = value.replace(/\[[^\[\]]+\]/g, "[att]");
+				value = value.replace(/\[[^\[\]]+\]/g, "[a]");
 			}
 			
 			// Simplify .class
 			if (value.indexOf(".") != -1) {
-				value = value.replace(/[.][-_a-zA-Z][-_a-zA-Z0-9]*/g, ".class");
+				value = value.replace(/[.][-_a-zA-Z][-_a-zA-Z0-9]*/g, ".c");
 			}
 			
 			// Simplify #id
 			if (value.indexOf("#") != -1) {
-				value = value.replace(/[#][-_a-zA-Z][-_a-zA-Z0-9]*/g, "#id");
+				value = value.replace(/[#][-_a-zA-Z][-_a-zA-Z0-9]*/g, "#i");
 			}
 			
 			// Normalize combinators
@@ -763,9 +767,9 @@ void function() { try {
 			value = value.replace(/[*]([#.\x5B:])/g,'$1');
 			
 			// Now we can sort components so that all browsers give results similar to Chrome
-			var ID_REGEXP = "[#]id";          // #id
-			var CLASS_REGEXP = "[.]class"; // .class
-			var ATTR_REGEXP = "\\[att\\]";    // [att]
+			var ID_REGEXP = "[#]i";          // #id
+			var CLASS_REGEXP = "[.]c"; // .class
+			var ATTR_REGEXP = "\\[a\\]";    // [att]
 			var PSEUDO_REGEXP = "[:][:]?[-_a-zA-Z][-_a-zA-Z0-9]*"; // :pseudo
 			var SORT_REGEXPS = [
 				
@@ -845,9 +849,9 @@ void function() { try {
 		 */
 		function extractFeature(feature, selector, counters) {
 			var instances = _(selector.match(feature)||[]).map(function(s) { return s.substr(1) }).value();
-			instances.forEach((instance) => {
+			for(var instance of instances) {
 				counters[instance] = (counters[instance]|0) + 1;
-			});
+			}
 		}
 		
 		/**
@@ -885,9 +889,9 @@ void function() { try {
 			// collect classes used in the wild
 			if(element.className) {
 				var elementClasses = [].slice.call(element.classList,0);
-				elementClasses.forEach(function(c) {
+				for(var c of elementClasses) {
 					domClasses[c] = (domClasses[c]|0) + 1;
-				});
+				}
 			}
 			
 			// collect ids used in the wild
@@ -1017,7 +1021,7 @@ void function() { try {
 				
 				var ModernizerUsages = {count:0,values:{/*  "js":1,  "no-js":2  */}};
 				var trackedClasses = ["js","ambientlight","applicationcache","audio","batteryapi","blobconstructor","canvas","canvastext","contenteditable","contextmenu","cookies","cors","cryptography","customprotocolhandler","customevent","dart","dataview","emoji","eventlistener","exiforientation","flash","fullscreen","gamepads","geolocation","hashchange","hiddenscroll","history","htmlimports","ie8compat","indexeddb","indexeddbblob","input","search","inputtypes","intl","json","olreversed","mathml","notification","pagevisibility","performance","pointerevents","pointerlock","postmessage","proximity","queryselector","quotamanagement","requestanimationframe","serviceworker","svg","templatestrings","touchevents","typedarrays","unicoderange","unicode","userdata","vibrate","video","vml","webintents","animation","webgl","websockets","xdomainrequest","adownload","audioloop","audiopreload","webaudio","lowbattery","canvasblending","todataurljpeg,todataurlpng,todataurlwebp","canvaswinding","getrandomvalues","cssall","cssanimations","appearance","backdropfilter","backgroundblendmode","backgroundcliptext","bgpositionshorthand","bgpositionxy","bgrepeatspace,bgrepeatround","backgroundsize","bgsizecover","borderimage","borderradius","boxshadow","boxsizing","csscalc","checked","csschunit","csscolumns","cubicbezierrange","display-runin","displaytable","ellipsis","cssescape","cssexunit","cssfilters","flexbox","flexboxlegacy","flexboxtweener","flexwrap","fontface","generatedcontent","cssgradients","hsla","csshyphens,softhyphens,softhyphensfind","cssinvalid","lastchild","cssmask","mediaqueries","multiplebgs","nthchild","objectfit","opacity","overflowscrolling","csspointerevents","csspositionsticky","csspseudoanimations","csspseudotransitions","cssreflections","regions","cssremunit","cssresize","rgba","cssscrollbar","shapes","siblinggeneral","subpixelfont","supports","target","textalignlast","textshadow","csstransforms","csstransforms3d","preserve3d","csstransitions","userselect","cssvalid","cssvhunit","cssvmaxunit","cssvminunit","cssvwunit","willchange","wrapflow","classlist","createelementattrs,createelement-attrs","dataset","documentfragment","hidden","microdata","mutationobserver","bdi","datalistelem","details","outputelem","picture","progressbar,meter","ruby","template","time","texttrackapi,track","unknownelements","es5array","es5date","es5function","es5object","es5","strictmode","es5string","es5syntax","es5undefined","es6array","contains","generators","es6math","es6number","es6object","promises","es6string","devicemotion,deviceorientation","oninput","filereader","filesystem","capture","fileinput","directory","formattribute","localizednumber","placeholder","requestautocomplete","formvalidation","sandbox","seamless","srcdoc","apng","jpeg2000","jpegxr","sizes","srcset","webpalpha","webpanimation","webplossless,webp-lossless","webp","inputformaction","inputformenctype","inputformmethod","inputformtarget","beacon","lowbandwidth","eventsource","fetch","xhrresponsetypearraybuffer","xhrresponsetypeblob","xhrresponsetypedocument","xhrresponsetypejson","xhrresponsetypetext","xhrresponsetype","xhr2","scriptasync","scriptdefer","speechrecognition","speechsynthesis","localstorage","sessionstorage","websqldatabase","stylescoped","svgasimg","svgclippaths","svgfilters","svgforeignobject","inlinesvg","smil","textareamaxlength","bloburls","datauri","urlparser","videoautoplay","videoloop","videopreload","webglextensions","datachannel","getusermedia","peerconnection","websocketsbinary","atob-btoa","framed","matchmedia","blobworkers","dataworkers","sharedworkers","transferables","webworkers"];
-				forEach(trackedClasses, (c) => { countInstancesOfTheClass(c); countInstancesOfTheClass('no-'+c); });
+				for(var c of trackedClasses) { countInstancesOfTheClass(c); countInstancesOfTheClass('no-'+c); }
 				return ModernizerUsages;
 				
 				function countInstancesOfTheClass(c) {
