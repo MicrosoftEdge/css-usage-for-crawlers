@@ -1,6 +1,7 @@
 void function() {
 
 	var _ = (a => new ArrayWrapper(a));
+	_.mapInline = mapInline;
 	_.map = map; /*.......*/ map.bind = (()=>map);
 	_.filter = filter; /*.*/ filter.bind = (()=>filter);
 	_.reduce = reduce; /*.*/ reduce.bind = (()=>reduce);
@@ -10,9 +11,10 @@ void function() {
 	
 	function ArrayWrapper(array) {
 		this.source = array;
-		this.map = function(f) { return new ArrayWrapper(map(this.source, f) )};
-		this.filter = function(f) { return new ArrayWrapper(filter(this.source, f) )};
-		this.reduce = function(v,f) { return new ArrayWrapper(reduce(this.source, f, v) )};
+		this.mapInline = function(f) { mapInline(this.source, f); return this; };
+		this.map = function(f) { this.source = map(this.source, f); return this; };
+		this.filter = function(f) { this.source = filter(this.source, f); return this; };
+		this.reduce = function(v,f) { this.source = reduce(this.source, f, v); return this; };
 		this.value = function() { return this.source };
 	}
 	
@@ -22,6 +24,13 @@ void function() {
 			clone[i] = transform(source[i]);
 		}
 		return clone;
+	}
+	
+	function mapInline(source, transform) {
+		for(var i = source.length; i--;) {
+			source[i] = transform(source[i]);
+		}
+		return source;
 	}
 	
 	function filter(source, shouldValueBeIncluded) {
@@ -355,8 +364,12 @@ void function() { try {
 	
 	var _ = window.CSSUsageLodash;
 	var map = _.map.bind(_);
+	var mapInline = _.mapInline ? _.mapInline : map;
 	var reduce = _.reduce.bind(_);
 	var filter = _.filter.bind(_);
+	
+	var browserIsEdge = navigator.userAgent.indexOf('Edge')>=0;
+	var browserIsFirefox = navigator.userAgent.indexOf('Firefox')>=0;
 	
 	//
 	// Guards execution against invalid conditions
@@ -460,7 +473,7 @@ void function() { try {
 		}
 		
 		// holds @keyframes temporarily while we wait to know how much they are used
-		var keyframes = {};
+		var keyframes = Object.create(null);
 		
 		/**
 		 * For all stylesheets of the document, 
@@ -663,28 +676,27 @@ void function() { try {
 		 * an array from it.
 		 */
 		function createValueArray(value, propertyName) {
-			var values = new Array();
-
 			value = normalizeValue(value, propertyName);
 
 			// Parse values like: width 1s height 5s time 2s
 			if (Array.isArray(value)) {
 
-				for(var val of value) {
+				for(var i = value.length; i--;) {
 					// We need to trim again as fonts at times will
 					// be Font, Font2, Font3 and so we need to trim
 					// the ones next to the commas
-					val = val.trim();
-					values.push(val);
+					value[i] = value[i].trim();
 				}
+				
+				return value;
 
 			}
+			
 			// Put the single value into an array so we get all values
 			else {
-				values = [value];
+				return [value];
 			}
-
-			return values;
+			
 		}
 
 		/**
@@ -700,10 +712,8 @@ void function() { try {
 			value = value.toLowerCase();
 
 			// Map colors to a standard value (eg: white, blue, yellow)
-			value = value.replace(/[#][0-9a-fA-F]+/g, '#000');
-			if (isKeywordColor(value)) {
-			   return "namedcolor"; 
-			}
+			if (isKeywordColor(value)) { return "namedcolor"; }
+			value = value.replace(/[#][0-9a-fA-F]+/g, '#0');
 			
 			// Remove any digits eg: 55px -> px, 1.5 -> 0.0, 1 -> 0
 			value = value.replace(/([+]|[-]|)(([0-9]+)([.][0-9]+|)|([.][0-9]+))([a-zA-Z%]+)/g, "$6"); 
@@ -742,7 +752,7 @@ void function() { try {
 					
 			}
 			 
-			return value;
+			return value.trim();
 			 
 		}
 
@@ -770,7 +780,7 @@ void function() { try {
 					}
 					
 					// Divide at commas to separate different font names
-					value = value.split(",");
+					value = value.split(/\s*,\s*/g);
 					return value;
 					
 				case '--var':
@@ -840,7 +850,7 @@ void function() { try {
 			else { buggyValues = Object.create(null); }
 			
 			// Edge reports initial value instead of "initial", we have to be cautious
-			if(navigator.userAgent.indexOf('Edge')>=0) {
+			if(browserIsEdge) {
 
 				buggyValues['*'] = 1; // make 0 values automatic for longhand properties
 				
@@ -885,7 +895,7 @@ void function() { try {
 			}
 			
 			// Firefox reports initial values instead of "initial", we have to be cautious
-			if(navigator.userAgent.indexOf('Firefox')>=0) {
+			if(browserIsFirefox) {
 				
 				buggyValues['*'] = 1; // make 0 values automatic for longhand properties
 				
@@ -897,8 +907,8 @@ void function() { try {
 			return getBuggyValuesForThisBrowser.cache = buggyValues;
 
 		};
-		var valueExistsInRootProperty = (cssText,key,value) => {
-			value = value.trim();
+		var valueExistsInRootProperty = (cssText,key,rootKey,value) => {
+			value = value.trim().toLowerCase();
 			
 			// detect suspicious values
 			var buggyValues = getBuggyValuesForThisBrowser();
@@ -907,13 +917,21 @@ void function() { try {
 			var buggyState = buggyValues[(key+':'+value).toLowerCase()];
 			if(buggyState === 1) { return false; }
 			if(buggyState !== 0 && (!buggyValues['*'] || CSSShorthands.unexpand(key).length == 0)) { return true; }
-							
+
+			// root properties are unlikely to lie
+			if(key==rootKey) return false;			
+			
 			// ask the browser is the best we can do right now
-			var rootKey = key.split("-")[0]; if(key==rootKey) return false;
 			var values = value.split(/\s+|\s*,\s*/g);
-			// TODO: better to extract all the values, then see if any of them contains what we are looking for using simple indexOf...
-			var result = values.every((value) => (new RegExp(' '+rootKey+'(?:[-][-_a-zA-Z0-9]+)?[:][^;]*'+value.trim().replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1"),'gi')).test(cssText));
-			return result;
+			var validValues = ' ';
+			var validValuesExtractor = new RegExp(' '+rootKey+'(?:[-][-_a-zA-Z0-9]+)?[:]([^;]*)','gi');
+			var match; while(match = validValuesExtractor.exec(cssText)) {
+				validValues += match[1] + ' ';
+			}
+			for(var value of values) {
+				if(validValues.indexOf(' '+value+' ')==-1) return false;
+			}
+			return true;
 			
 		};
 		
@@ -924,10 +942,10 @@ void function() { try {
 			var count = matchedElements.length;
 			var selector = selectorText;
 			var selectorCat = {'1:true':'@inline','1:false':'@stylerule'}[''+type+':'+isInline]||'@atrule';
-			var isRuleUnsed = () => (count == 0);
 			
 			// Keep track of unused rules
-			if(isRuleUnsed()) {
+			var isRuleUnused = (count == 0);
+			if(isRuleUnused) {
 				CSSUsage.StyleWalker.amountOfSelectorsUnused++;
 			}
 			
@@ -940,7 +958,7 @@ void function() { try {
 			
 			// Get the datastores of the generalized selectors
 			var generalizedSelectorsData = map(generalizedSelectors, (generalizedSelector) => (
-				CSSUsageResults.rules[generalizedSelector] || (CSSUsageResults.rules[generalizedSelector] = {count:0,props:{}})
+				CSSUsageResults.rules[generalizedSelector] || (CSSUsageResults.rules[generalizedSelector] = {count:0,props:Object.create(null)})
 			));
 			
 			// Increment the occurence counter of found generalized selectors
@@ -949,50 +967,53 @@ void function() { try {
 			}
 			
 			// avoid most common browser lies
-			var cssText = ' '+style.cssText; 
-			if(navigator.userAgent.indexOf('Edge')>=0) {
-				cssText = cssText.replace(/border: medium; border-image: none;/i,'border: none;');
-				cssText = cssText.replace(/ border-image: none;/i,'');
+			var cssText = ' '+style.cssText.toLowerCase(); 
+			if(browserIsEdge) {
+				cssText = cssText.replace(/border: medium; border-image: none;/,'border: none;');
+				cssText = cssText.replace(/ border-image: none;/,' ');
 			}
-						
+			
 			// For each property declaration in this rule, we collect some stats
 			for (var i = style.length; i--;) {
 
-				var key = style[i], rootKey = key.replace(/[-].*/,'');
-				var normalizedKey = key.replace(/^--.*/,'--var');
+				var key = style[i], rootKeyIndex=key.indexOf('-'), rootKey = rootKeyIndex==-1 ? key : key.substr(0,rootKeyIndex);
+				var normalizedKey = rootKeyIndex==0&&key.indexOf('-',1)==1 ? '--var' : key;
 				var styleValue = style.getPropertyValue(key);
 				
 				// Only keep styles that were declared by the author
 				// We need to make sure we're only checking string props
-				var isValueInvalid = () => (typeof styleValue !== 'string' && styleValue != "" && styleValue != undefined);
-				var isPropertyUndefined = () => (((' '+cssText).indexOf(' '+key+':') == -1) && (styleValue=='initial' || !valueExistsInRootProperty(cssText, key, styleValue)));
+				var isValueInvalid = typeof styleValue !== 'string' && styleValue != "" && styleValue != undefined;
+				if (isValueInvalid) { 
+					continue;
+				}
 				
-				if (isValueInvalid() || isPropertyUndefined()) {
+				var isPropertyUndefined = (cssText.indexOf(' '+key+':') == -1) && (styleValue=='initial' || !valueExistsInRootProperty(cssText, key, rootKey, styleValue));
+				if (isPropertyUndefined) {
 					continue;
 				}
 				
 				// divide the value into simplified components
-				var values = (
-					_(CSSUsage.CSSValues.createValueArray(styleValue,normalizedKey)) // split in components
-					.map(v => CSSUsage.CSSValues.parseValues(v,normalizedKey)) // simplify them
-					.filter(v => v.trim()) // don't keep empty ones
-					.value()
-				);
+				var values = CSSUsage.CSSValues.createValueArray(styleValue,normalizedKey);
+				for(var j=values.length; j--;) {
+					values[j] = CSSUsage.CSSValues.parseValues(values[j],normalizedKey)
+				}
 				
 				// log the property usage per selector
 				for(var generalizedSelectorData of generalizedSelectorsData) {
 					
 					// get the datastore for current property
-					var propStats = generalizedSelectorData.props[normalizedKey] || (generalizedSelectorData.props[normalizedKey] = {count:0,values:{}});
+					var propStats = generalizedSelectorData.props[normalizedKey] || (generalizedSelectorData.props[normalizedKey] = {count:0,values:Object.create(null)});
 
 					// we saw the property one time
 					propStats.count++;
 					
 					// we also saw a bunch of values
 					for(var value of values) {
-						
+												
 						// increment the counts for those by one, too
-						propStats.values[value] = (propStats.values[value]|0) + 1
+						if(value.length>0) {
+							propStats.values[value] = (propStats.values[value]|0) + 1
+						}
 						
 					}
 					
@@ -1011,7 +1032,7 @@ void function() { try {
 					}
 					
 					// update the occurence counts of the property and value
-					for(let element of matchedElements) {
+					for(var element of matchedElements) {
 						
 						// check what the elements already contributed for this property
 						var cssUsageMeta = element.CSSUsage || (element.CSSUsage=Object.create(null));
@@ -1021,7 +1042,7 @@ void function() { try {
 						if(knownValues.length == 0) { propObject.count += 1; }
 
 						// add newly found values too
-						for(let value of values) {
+						for(var value of values) {
 							
 							if(knownValues.indexOf(value) >= 0) { return; }
 							propObject.values[value] = (propObject.values[value]|0) + 1;
@@ -1072,7 +1093,7 @@ void function() { try {
 			if(text.indexOf(':') == -1) {
 				return text;
 			} else {
-				return text.replace(/([-_a-zA-Z0-9*]?):(?:hover|active|focus|before|after|not\(:(hover|active|focus)\))|::(?:before|after)/gi, '>>$1<<').replace(/^>><</g,'*').replace(/\(>><<\)/g,'(*)').replace(/ >><</g,' *').replace(/>>([-_a-zA-Z0-9*]?)<</g,'$1');
+				return text.replace(/([-_a-zA-Z0-9*\[\]]?):(?:hover|active|focus|before|after|not\(:(hover|active|focus)\))|::(?:before|after)/gi, '>>$1<<').replace(/(^| |>|\+|~)>><</g,'$1*').replace(/\(>><<\)/g,'(*)').replace(/>>([-_a-zA-Z0-9*]?)<</g,'$1');
 			}
 		}
 		
@@ -1120,27 +1141,37 @@ void function() { try {
 			value = value.replace(/[*]([#.\x5B:])/g,'$1');
 			
 			// Now we can sort components so that all browsers give results similar to Chrome
-			var ID_REGEXP = "[#]i";          // #id
-			var CLASS_REGEXP = "[.]c"; // .class
-			var ATTR_REGEXP = "\\[a\\]";    // [att]
-			var PSEUDO_REGEXP = "[:][:]?[-_a-zA-Z][-_a-zA-Z0-9]*"; // :pseudo
-			var SORT_REGEXPS = [
-				
-				// #id first
-				new RegExp("("+CLASS_REGEXP+")("+ID_REGEXP+")",'g'),
-				new RegExp("("+ATTR_REGEXP+")("+ID_REGEXP+")",'g'),
-				new RegExp("("+PSEUDO_REGEXP+")("+ID_REGEXP+")",'g'),
-				
-				// .class second
-				new RegExp("("+ATTR_REGEXP+")("+CLASS_REGEXP+")",'g'),
-				new RegExp("("+PSEUDO_REGEXP+")("+CLASS_REGEXP+")",'g'),
-				
-				// [attr] third
-				new RegExp("("+PSEUDO_REGEXP+")("+ATTR_REGEXP+")",'g'),
-				
-				// :pseudo last
-				
-			];
+			value = sortSelectorComponents(value)
+			
+			// Split multiple selectors
+			value = value.split(/\s*,\s*/g);
+
+			return value;
+
+		}
+		
+		var ID_REGEXP = "[#]i";         // #id
+		var CLASS_REGEXP = "[.]c";      // .class
+		var ATTR_REGEXP = "\\[a\\]";    // [att]
+		var PSEUDO_REGEXP = "[:][:]?[-_a-zA-Z][-_a-zA-Z0-9]*"; // :pseudo
+		var SORT_REGEXPS = [
+			
+			// #id first
+			new RegExp("("+CLASS_REGEXP+")("+ID_REGEXP+")",'g'),
+			new RegExp("("+ATTR_REGEXP+")("+ID_REGEXP+")",'g'),
+			new RegExp("("+PSEUDO_REGEXP+")("+ID_REGEXP+")",'g'),
+			
+			// .class second
+			new RegExp("("+ATTR_REGEXP+")("+CLASS_REGEXP+")",'g'),
+			new RegExp("("+PSEUDO_REGEXP+")("+CLASS_REGEXP+")",'g'),
+			
+			// [attr] third
+			new RegExp("("+PSEUDO_REGEXP+")("+ATTR_REGEXP+")",'g'),
+			
+			// :pseudo last
+			
+		];
+		function sortSelectorComponents(value) {
 			
 			var oldValue; do { // Yeah this is a very inefficient bubble sort. I know.
 				
@@ -1149,12 +1180,7 @@ void function() { try {
 					value = value.replace(wrongPair,'$2$1');
 				}
 				
-			} while(oldValue != value);
-			
-			// Split multiple selectors
-			value = value.split(/\s*,\s*/);
-
-			return value;
+			} while(oldValue != value); return value;
 
 		}
 
@@ -1201,8 +1227,9 @@ void function() { try {
 		 * increment the counters for the matches in the selector of the 'feature' regular expression
 		 */
 		function extractFeature(feature, selector, counters) {
-			var instances = _(selector.match(feature)||[]).map(function(s) { return s.substr(1) }).value();
+			var instances = selector.match(feature)||[];
 			for(var instance of instances) {
+				instance = instance.substr(1);
 				counters[instance] = (counters[instance]|0) + 1;
 			}
 		}
@@ -1241,7 +1268,7 @@ void function() { try {
 			
 			// collect classes used in the wild
 			if(element.className) {
-				var elementClasses = [].slice.call(element.classList,0);
+				var elementClasses = element.classList;
 				for(var c of elementClasses) {
 					domClasses[c] = (domClasses[c]|0) + 1;
 				}

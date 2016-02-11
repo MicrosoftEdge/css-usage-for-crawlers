@@ -1,6 +1,7 @@
 ﻿void function() {
 
 	var _ = (a => new ArrayWrapper(a));
+	_.mapInline = mapInline;
 	_.map = map; /*.......*/ map.bind = (()=>map);
 	_.filter = filter; /*.*/ filter.bind = (()=>filter);
 	_.reduce = reduce; /*.*/ reduce.bind = (()=>reduce);
@@ -10,9 +11,10 @@
 	
 	function ArrayWrapper(array) {
 		this.source = array;
-		this.map = function(f) { return new ArrayWrapper(map(this.source, f) )};
-		this.filter = function(f) { return new ArrayWrapper(filter(this.source, f) )};
-		this.reduce = function(v,f) { return new ArrayWrapper(reduce(this.source, f, v) )};
+		this.mapInline = function(f) { mapInline(this.source, f); return this; };
+		this.map = function(f) { this.source = map(this.source, f); return this; };
+		this.filter = function(f) { this.source = filter(this.source, f); return this; };
+		this.reduce = function(v,f) { this.source = reduce(this.source, f, v); return this; };
 		this.value = function() { return this.source };
 	}
 	
@@ -22,6 +24,13 @@
 			clone[i] = transform(source[i]);
 		}
 		return clone;
+	}
+	
+	function mapInline(source, transform) {
+		for(var i = source.length; i--;) {
+			source[i] = transform(source[i]);
+		}
+		return source;
 	}
 	
 	function filter(source, shouldValueBeIncluded) {
