@@ -23,6 +23,14 @@ void function() { try {
 		// Don't run if we don't have lodash
 		if (!window.CSSUsageLodash) throw new Error("CSSUsage: missing CSSUsageLodash dependency");
 		
+		// Do not allow buggy trim() to bother usage
+		if((''+String.prototype.trim).indexOf("[native code]") == -1) {
+			console.warn('Replaced custom trim function with something known to work. Might break website.');
+			String.prototype.trim = function() {
+				return this.replace(/^\s+|\s+$/g, '');
+			}
+		}
+		
 	}();
 
 	//
@@ -306,36 +314,8 @@ void function() { try {
 		CSSUsage.CSSValues = {
 			createValueArray: createValueArray,
 			parseValues: parseValues,
-			normalizeValue: normalizeValue
+			normalizeValue: createValueArray
 		};
-
-		/**
-		 * This takes a string value and will create
-		 * an array from it.
-		 */
-		function createValueArray(value, propertyName) {
-			value = normalizeValue(value, propertyName);
-
-			// Parse values like: width 1s height 5s time 2s
-			if (Array.isArray(value)) {
-
-				for(var i = value.length; i--;) {
-					// We need to trim again as fonts at times will
-					// be Font, Font2, Font3 and so we need to trim
-					// the ones next to the commas
-					value[i] = value[i].trim();
-				}
-				
-				return value;
-
-			}
-			
-			// Put the single value into an array so we get all values
-			else {
-				return [value];
-			}
-			
-		}
 
 		/**
 		 * This will take a string value and reduce it down
@@ -384,8 +364,12 @@ void function() { try {
 				case '--var':
 				
 					// Replace {...} and [...]
-					value = value.replace(/\[([^\[\]]+|\[[^\[\]]+\])+\]/g, "[...]");
-					value = value.replace(/\{([^\{\}]+|\{[^\{\}]+\})+\}/g, "{...}");
+					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
+					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
+					value = value.replace(/\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]*)\])*\])*\])*\])*\]/g, "[...]");
+					value = value.replace(/\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]*)\])*\])*\])*\])*\]/g, "[...]");
+					value = value.replace(/\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]*)\})*\})*\})*\})*\}/g, "{...}");
+					value = value.replace(/\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]*)\})*\})*\})*\})*\}/g, "{...}");
 					break;
 					
 			}
@@ -397,10 +381,9 @@ void function() { try {
 		//-----------------------------------------------------------------------------
 
 		/**
-		 * This will normalize the values so that
-		 * we only keep the unique values
+		 * This will transform a value into an array of value identifiers
 		 */ 
-		function normalizeValue(value, propertyName) {
+		function createValueArray(value, propertyName) {
 
 			// Trim value on the edges
 			value = value.trim();
@@ -429,7 +412,10 @@ void function() { try {
 					
 					// Remove group contents (...), {...} and [...]
 					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
+					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
 					value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, "{...}");
+					value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, "{...}");
+					value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, "[...]");
 					value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, "[...]");
 					
 					break;
@@ -442,6 +428,7 @@ void function() { try {
 					
 					// Remove (...)
 					if (value.indexOf("(") != -1) {
+						value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
 						value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
 					}
 					
@@ -552,7 +539,7 @@ void function() { try {
 			var buggyValues = getBuggyValuesForThisBrowser();
 			
 			// apply common sense to the given value, per browser
-			var buggyState = buggyValues[(key+':'+value).toLowerCase()];
+			var buggyState = buggyValues[key+':'+value];
 			if(buggyState === 1) { return false; }
 			if(buggyState !== 0 && (!buggyValues['*'] || CSSShorthands.unexpand(key).length == 0)) { return true; }
 
@@ -731,7 +718,7 @@ void function() { try {
 			if(text.indexOf(':') == -1) {
 				return text;
 			} else {
-				return text.replace(/([-_a-zA-Z0-9*\[\]]?):(?:hover|active|focus|before|after|not\(:(hover|active|focus)\))|::(?:before|after)/gi, '>>$1<<').replace(/(^| |>|\+|~)>><</g,'$1*').replace(/\(>><<\)/g,'(*)').replace(/>>([-_a-zA-Z0-9*]?)<</g,'$1');
+				return text.replace(/([-_a-zA-Z0-9*\[\]]?):(?:hover|active|focus|before|after|not\(:(hover|active|focus)\))|::(?:before|after)/gi, '>>$1<<').replace(/(^| |>|\+|~)>><</g,'$1*').replace(/\(>><<\)/g,'(*)').replace(/>>([-_a-zA-Z0-9*\[\]]?)<</g,'$1');
 			}
 		}
 		
@@ -751,11 +738,19 @@ void function() { try {
 			
 			// Remove (...)
 			if (value.indexOf("(") != -1) {
-				value = value.replace(/[(]([^()]+|[(]([^()]+)[)])+[)]/g, "");
+				value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
+				value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
 			}
+			
+			// Simplify "..." and '...'
+			value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
+			value = value.replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,"'...'");
+
 			
 			// Simplify [att]
 			if (value.indexOf("[") != -1) {
+				value = value.replace(/\[[^=\[\]]+="([^"\\]|\\[^"\\]|\\\\|\\")*"\]/g, "[a]");
+				value = value.replace(/\[[^=\[\]]+='([^'\\]|\\[^'\\]|\\\\|\\')*'\]/g, "[a]");
 				value = value.replace(/\[[^\[\]]+\]/g, "[a]");
 			}
 			
