@@ -67,7 +67,7 @@ void function() { try {
 				"background-color": {
 					count: 10,
 					values: {
-						"namedcolor": 9,
+						"<color-keyword>": 9,
 						"inherit": 1
 					}
 				}
@@ -330,14 +330,15 @@ void function() { try {
 			value = value.toLowerCase();
 
 			// Map colors to a standard value (eg: white, blue, yellow)
-			if (isKeywordColor(value)) { return "namedcolor"; }
-			value = value.replace(/[#][0-9a-fA-F]+/g, '#0');
+			if (isKeywordColor(value)) { return "<color-keyword>"; }
+			value = value.replace(/[#][0-9a-fA-F]+/g, '#xxyyzz');
 			
 			// Remove any digits eg: 55px -> px, 1.5 -> 0.0, 1 -> 0
-			value = value.replace(/([+]|[-]|)(([0-9]+)([.][0-9]+|)|([.][0-9]+))([a-zA-Z%]+)/g, "$6"); 
-			value = value.replace(/([+]|[-]|)([0-9]+)([.][0-9]+)/g, "0.0");
-			value = value.replace(/([+]|[-]|)([.][0-9]+)/g, "0.0");
-			value = value.replace(/([+]|[-]|)([0-9]+)/g, "0");
+			value = value.replace(/(?:[+]|[-]|)(?:(?:[0-9]+)(?:[.][0-9]+|)|(?:[.][0-9]+))(?:[e](?:[+]|[-]|)(?:[0-9]+))?(%|e[a-z]+|[a-df-z][a-z]*)/g, "$1"); 
+			value = value.replace(/(?:[+]|[-]|)(?:[0-9]+)(?:[.][0-9]+)(?:[e](?:[+]|[-]|)(?:[0-9]+))?/g, " <float> ");
+			value = value.replace(/(?:[+]|[-]|)(?:[.][0-9]+)(?:[e](?:[+]|[-]|)(?:[0-9]+))?/g, " <float> ");
+			value = value.replace(/(?:[+]|[-]|)(?:[0-9]+)(?:[e](?:[+]|[-]|)(?:[0-9]+))/g, " <float> ");
+			value = value.replace(/(?:[+]|[-]|)(?:[0-9]+)/g, " <int> ");
 			
 			// Remove quotes
 			value = value.replace(/('|‘|’|")/g, "");
@@ -348,7 +349,7 @@ void function() { try {
 				case 'counter-reset':
 					
 					// Anonymize the user identifier
-					value = value.replace(/[-_a-zA-Z0-9]+/g,'iden');
+					value = value.replace(/[-_a-zA-Z0-9]+/g,' <custom-ident> ');
 					break;
 					
 				case 'grid':
@@ -358,18 +359,18 @@ void function() { try {
 				case 'grid-template-areas':
 					
 					// Anonymize line names
-					value = value.replace(/\[[-_a-zA-Z0-9 ]+\]/g,'[names]');
+					value = value.replace(/\[[-_a-zA-Z0-9 ]+\]/g,' <line-names> ');
 					break;
 					
 				case '--var':
 				
-					// Replace {...} and [...]
-					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
-					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
-					value = value.replace(/\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]*)\])*\])*\])*\])*\]/g, "[...]");
-					value = value.replace(/\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]*)\])*\])*\])*\])*\]/g, "[...]");
-					value = value.replace(/\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]*)\})*\})*\})*\})*\}/g, "{...}");
-					value = value.replace(/\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]*)\})*\})*\})*\})*\}/g, "{...}");
+					// Replace (...), {...} and [...]
+					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, " <parentheses-block> ");
+					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, " <parentheses-block> ");
+					value = value.replace(/\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]*)\])*\])*\])*\])*\]/g, " <curly-brackets-block> ");
+					value = value.replace(/\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]+|\[(?:[^()]*)\])*\])*\])*\])*\]/g, " <curly-brackets-block> ");
+					value = value.replace(/\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]*)\})*\})*\})*\})*\}/g, " <square-brackets-block> ");
+					value = value.replace(/\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]+|\{(?:[^()]*)\})*\})*\})*\})*\}/g, " <square-brackets-block> ");
 					break;
 					
 			}
@@ -391,6 +392,9 @@ void function() { try {
 			// Normalize letter-casing
 			value = value.toLowerCase();
 			
+			// Remove comments and !important
+			value = value.replace(/([/][*](?:.|\r|\n)*[*][/]|[!]important.*)/g,'');
+			
 			// Do the right thing in function of the property
 			switch(propertyName) {
 				case 'font-family':
@@ -407,36 +411,42 @@ void function() { try {
 				case '--var':
 				
 					// Replace strings by dummies
-					value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
-					value = value.replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,'"..."');
+					value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,' <string> ')
+					value = value.replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,' <string> ');
+					
+					// Replace url(...) functions by dummies
+					value = value.replace(/([a-z]?)[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "$1()");
+					value = value.replace(/([a-z]?)[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "$1()");
 					
 					// Remove group contents (...), {...} and [...]
-					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
-					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "(...)");
-					value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, "{...}");
-					value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, "{...}");
-					value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, "[...]");
-					value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, "[...]");
+					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, " <parentheses-block> ");
+					value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, " <parentheses-block> ");
+					value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, " <curly-brackets-block> ");
+					value = value.replace(/[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]+|[{](?:[^{}]*)[}])*[}])*[}])*[}])*[}]/g, " <curly-brackets-block> ");
+					value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, " <square-brackets-block> ");
+					value = value.replace(/[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]+|[\[](?:[^\[\]]*)[\]])*[\]])*[\]])*[\]])*[\]]/g, " <square-brackets-block> ");
 					
 					break;
 					
 				default:
 				
 					// Replace strings by dummies
-					value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
-								 .replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,'"..."');
+					value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,' <string> ')
+								 .replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,' <string> ');
 					
-					// Remove (...)
+					// Replace url(...) functions by dummies
 					if (value.indexOf("(") != -1) {
-						value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
-						value = value.replace(/[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "");
+						value = value.replace(/([a-z]?)[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "$1() ");
+						value = value.replace(/([a-z]?)[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]+|[(](?:[^()]*)[)])*[)])*[)])*[)])*[)]/g, "$1() ");
 					}
 					
 			}
 			
+			// Collapse whitespace
+			value = value.trim().replace(/\s+/g, " ");
 			
 			// Divide at commas and spaces to separate different values
-			value = value.split(/\s*,\s*|\s+/g);
+			value = value.split(/\s*(?:,|[/])\s*|\s+/g);
 			
 			return value;
 		}
@@ -449,7 +459,7 @@ void function() { try {
 		function isKeywordColor(candidateColor) {
 			
 			// Keyword colors from the W3C specs
-			var isColorKeyword = /^(aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgray|darkgreen|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategray|darkturquoise|darkviolet|deeppink|deepskyblue|dimgray|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gray|green|greenyellow|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgreen|lightgrey|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategray|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|navyblue|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategray|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)$/;
+			var isColorKeyword = /^(aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgray|darkgrey|darkgreen|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategray|darkslategrey|darkturquoise|darkviolet|deeppink|deepskyblue|dimgray|dimgrey|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gray|grey|green|greenyellow|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgreen|lightgray|lightgrey|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategray|lighslategrey|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|navyblue|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|rebeccapurple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategray|slategrey|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)$/;
 			return isColorKeyword.test(candidateColor);
 			
 		}
@@ -689,14 +699,14 @@ void function() { try {
 				
 				// anonymize identifiers used for animation-name globally
 				if(CSSUsageResults.props["animation-name"]) {
-					CSSUsageResults.props["animation-name"].values = {"iden":CSSUsageResults.props["animation-name"].count};
+					CSSUsageResults.props["animation-name"].values = {"<custom-ident>":CSSUsageResults.props["animation-name"].count};
 				}
 				
 				// anonymize identifiers used for animation-name per selector
 				for(var selector in CSSUsageResults.rules) { 
 					var rule = CSSUsageResults.rules[selector];
 					if(rule && rule.props && rule.props["animation-name"]) {
-						rule.props["animation-name"].values = {"iden":rule.props["animation-name"].count};
+						rule.props["animation-name"].values = {"<custom-ident>":rule.props["animation-name"].count};
 					}
 				}
 				
@@ -743,8 +753,8 @@ void function() { try {
 			}
 			
 			// Simplify "..." and '...'
-			value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'"..."')
-			value = value.replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,"'...'");
+			value = value.replace(/"([^"\\]|\\[^"\\]|\\\\|\\")*"/g,'""')
+			value = value.replace(/'([^'\\]|\\[^'\\]|\\\\|\\')*'/g,"''");
 
 			
 			// Simplify [att]
