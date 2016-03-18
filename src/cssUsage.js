@@ -333,12 +333,28 @@ void function() { try {
 			if (isKeywordColor(value)) { return "<color-keyword>"; }
 			value = value.replace(/[#][0-9a-fA-F]+/g, '#xxyyzz');
 			
+			// Escapce identifiers containing numbers
+			var numbers = ['ZERO','ONE','TWO','THREE','FOUR','FIVE','SIX','SEVEN','EIGHT','NINE'];
+			value = value.replace(
+				/([_a-z][-_a-z]|[_a-df-z])[0-9]+[-_a-z0-9]*/g, 
+				s=>numbers.reduce(
+					(m,nstr,nint)=>m.replace(RegExp(nint,'g'),nstr),
+					s
+				)
+			);
+			
 			// Remove any digits eg: 55px -> px, 1.5 -> 0.0, 1 -> 0
 			value = value.replace(/(?:[+]|[-]|)(?:(?:[0-9]+)(?:[.][0-9]+|)|(?:[.][0-9]+))(?:[e](?:[+]|[-]|)(?:[0-9]+))?(%|e[a-z]+|[a-df-z][a-z]*)/g, "$1"); 
 			value = value.replace(/(?:[+]|[-]|)(?:[0-9]+)(?:[.][0-9]+)(?:[e](?:[+]|[-]|)(?:[0-9]+))?/g, " <float> ");
 			value = value.replace(/(?:[+]|[-]|)(?:[.][0-9]+)(?:[e](?:[+]|[-]|)(?:[0-9]+))?/g, " <float> ");
 			value = value.replace(/(?:[+]|[-]|)(?:[0-9]+)(?:[e](?:[+]|[-]|)(?:[0-9]+))/g, " <float> ");
 			value = value.replace(/(?:[+]|[-]|)(?:[0-9]+)/g, " <int> ");
+			
+			// Unescapce identifiers containing numbers
+			value = numbers.reduce(
+				(m,nstr,nint)=>m.replace(RegExp(nstr,'g'),nint),
+				value
+			)
 			
 			// Remove quotes
 			value = value.replace(/('|‘|’|")/g, "");
