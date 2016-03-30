@@ -6,8 +6,11 @@ module.exports = function(grunt) {
     concat: {
         src: {
             src: [
+              //'src/cssParser.js',
 			  'src/lodash.js',
+			  'src/gzip.js',
 			  'src/cssShorthands.js',
+              'src/cssUsageResults.js',
               'src/cssUsage.js',
             ],
             dest: 'cssUsage.src.js'
