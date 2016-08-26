@@ -49,6 +49,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 
 	// Collect the results (css)
 	INSTRUMENTATION_RESULTS.css = CSSUsageResults;
+	INSTRUMENTATION_RESULTS.html = HtmlUsageResults;
 	
 	// Convert it to a more efficient format
 	INSTRUMENTATION_RESULTS_TSV = convertToTSV(INSTRUMENTATION_RESULTS);
@@ -1078,8 +1079,6 @@ void function () {
 				CSSUsage.SelectorAnalyzer.finalize();
 
 				CSSUsageResults.duration = performance.now() - startTime | 0;
-
-				CSSUsageResults.HtmlUsageResults = window.HtmlUsageResults;
 
 				window.debugCSSUsage = true;
 				if (window.debugCSSUsage) console.log(CSSUsageResults);
