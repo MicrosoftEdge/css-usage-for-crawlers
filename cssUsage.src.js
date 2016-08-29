@@ -142,7 +142,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 				/*URL:        http://.../...                  */'',
 				/*TIMESTAMP:  1445622257303                   */'',
 				/*VALUE:      0|1|...                         */'',
-				/*DATATYPE:   css|dom|...                     */'',
+				/*DATATYPE:   css|dom|html...                     */'',
 				/*SUBTYPE:    props|types|api|...             */'',
 				/*NAME:       font-size|querySelector|...     */'',
 				/*CONTEXT:    count|values|...                */'',
@@ -341,11 +341,15 @@ void function () {
 }.call(window.CSSShorthands = {});
 
 void function () {
+
 	window.HtmlUsage = {};
 
 	window.HtmlUsage.GetNodeName = function (element) {
 		var node = element.nodeName;
-		window.HtmlUsageResults.tags.push(node);
+
+		var tags = HtmlUsageResults.tags || (HtmlUsageResults.tags = {});
+		var tag = tags[node] || (tags[node] = 0);
+		tags[node]++;
 
 		GetAttributes(element, node);
 	};
@@ -357,20 +361,18 @@ void function () {
 			var att = element.attributes[i];
 
 			if (att.nodeName.indexOf('-') == -1 || whitelist.indexOf('aria-') > -1) {
-				var tempAttr = { name: att.nodeName, tag: node, value: "" };
-				var storeAttrValue = true;
 
-				if (att.nodeName == "name" && node != "META") {
-					storeAttrValue = false;
+				var attributes = HtmlUsageResults.attributes || (HtmlUsageResults.attributes = {});
+				var attributeTag = attributes[node] || (attributes[node] = {});
+				var attribute = attributeTag[att.nodeName] || (attributeTag[att.nodeName] = { count: 0, values: {} });
+
+				if (whitelist.indexOf(att.nodeName) > -1 || att.nodeName == "name" && node == "META") {
+					var attributeValue = attribute.values[att.value];
+
+					attribute.values[att.value] = 1;
 				}
 
-				if (whitelist.indexOf(att.nodeName) > -1) {
-					tempAttr.value = att.value;
-				}
-
-				if (storeAttrValue) {
-					window.HtmlUsageResults.attributes.push(tempAttr);
-				}
+				attribute.count++;
 			}
 		}
 	}
@@ -406,8 +408,8 @@ void function () {
 
 		void function () {
 			window.HtmlUsageResults = {
-				tags: [],
-				attributes: [] };
+				tags: {},
+				attributes: {} };
 
 			window.CSSUsage = {};
 			window.CSSUsageResults = {
