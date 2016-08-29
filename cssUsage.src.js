@@ -1082,7 +1082,6 @@ void function () {
 
 				CSSUsageResults.duration = performance.now() - startTime | 0;
 
-				window.debugCSSUsage = true;
 				if (window.debugCSSUsage) console.log(CSSUsageResults);
 				if (window.onCSSUsageResults) {
 					window.onCSSUsageResults(CSSUsageResults);
