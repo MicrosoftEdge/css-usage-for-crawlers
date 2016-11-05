@@ -50,6 +50,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 	// Collect the results (css)
 	INSTRUMENTATION_RESULTS.css = CSSUsageResults;
 	INSTRUMENTATION_RESULTS.html = HtmlUsageResults;
+	INSTRUMENTATION_RESULTS.recipe = RecipeResults;
 	
 	// Convert it to a more efficient format
 	INSTRUMENTATION_RESULTS_TSV = convertToTSV(INSTRUMENTATION_RESULTS);
@@ -100,6 +101,10 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 
 		currentRowTemplate.push('html');
 		convertToTSV(INSTRUMENTATION_RESULTS['html']);
+		currentRowTemplate.pop();
+
+		currentRowTemplate.push('recipe');
+		convertToTSV(INSTRUMENTATION_RESULTS['recipe']);
 		currentRowTemplate.pop();
 		
 		//currentRowTemplate.push('scripts');
@@ -582,24 +587,14 @@ void function () {
 	};
 
 	function GetAttributes(element, node) {
-		var whitelist = ["aria-hidden", "aria-live", "aria-atomic", "aria-busy", "aria-disabled", "aria-expanded", "aria-sort", "aria-readonly", "aria-required", "aria-selected", "type", "dir", "disabled", "draggable", "lang", "role", "content", "name"];
-
 		for (var i = 0; i < element.attributes.length; i++) {
 			var att = element.attributes[i];
 
-			if (att.nodeName.indexOf('-') == -1 || whitelist.indexOf('aria-') > -1) {
-
+			if (att.nodeName.indexOf('data-') == -1) {
 				var attributes = HtmlUsageResults.attributes || (HtmlUsageResults.attributes = {});
-				var attributeTag = attributes[node] || (attributes[node] = {});
-				var attribute = attributeTag[att.nodeName] || (attributeTag[att.nodeName] = { count: 0, values: {} });
-
-				if (whitelist.indexOf(att.nodeName) > -1 || att.nodeName == "name" && node == "META") {
-					var attributeValue = attribute.values[att.value];
-
-					attribute.values[att.value] = 1;
-				}
-
-				attribute.count++;
+				var attribute = attributes[att.nodeName] || (attributes[att.nodeName] = {});
+				var attributeTag = attribute[node] || (attribute[node] = { count: 0 });
+				attributeTag.count++;
 			}
 		}
 	}
@@ -638,6 +633,11 @@ void function () {
 				tags: {},
 				attributes: {} };
 
+			window.RecipeResults = {};
+			window.Recipes = {
+				recipes: []
+			};
+
 			window.CSSUsage = {};
 			window.CSSUsageResults = {
 				types: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -655,6 +655,9 @@ void function () {
 
 				elementAnalyzers: [],
 
+				recipesToRun: [],
+				runRecipes: false,
+
 				walkOverCssStyles: walkOverCssStyles,
 				walkOverDomElements: walkOverDomElements,
 
@@ -662,6 +665,8 @@ void function () {
 				amountOfSelectorsUnused: 0,
 				amountOfSelectors: 0
 			};
+
+			var hasWalkedDomElementsOnce = false;
 
 			var keyframes = Object.create(null);
 
@@ -746,8 +751,9 @@ void function () {
 				}
 			}
 
-			function walkOverDomElements(obj, index, depth) {
-				obj = obj || document.documentElement;index = index | 0;depth = depth | 0;
+			function walkOverDomElements(obj, index) {
+				var recipesToRun = CSSUsage.StyleWalker.recipesToRun;
+				obj = obj || document.documentElement;index = index | 0;
 
 				var elements = [].slice.call(document.all, 0);
 				for (var i = 0; i < elements.length; i++) {
@@ -755,12 +761,20 @@ void function () {
 
 					runElementAnalyzers(element, index);
 
-					if (element.hasAttribute('style')) {
-						var ruleType = 1;
-						var isInline = true;
-						var selectorText = '@inline:' + element.tagName;
-						var matchedElements = [element];
-						runRuleAnalyzers(element.style, selectorText, matchedElements, ruleType, isInline);
+					if (!CSSUsage.StyleWalker.runRecipes) {
+						if (element.hasAttribute('style')) {
+							var ruleType = 1;
+							var isInline = true;
+							var selectorText = '@inline:' + element.tagName;
+							var matchedElements = [element];
+							runRuleAnalyzers(element.style, selectorText, matchedElements, ruleType, isInline);
+						}
+					} else {
+						for (var r = 0; r < recipesToRun.length; r++) {
+							var recipeToRun = recipesToRun[r];
+							var results = RecipeResults[recipeToRun.name] || (RecipeResults[recipeToRun.name] = {});
+							recipeToRun(element, results, true);
+						}
 					}
 				}
 			}
@@ -1040,9 +1054,10 @@ void function () {
 						continue;
 					}
 
-					var values = CSSUsage.CSSValues.createValueArray(styleValue, normalizedKey);
-					for (var j = values.length; j--;) {
-						values[j] = CSSUsage.CSSValues.parseValues(values[j], normalizedKey);
+					var specifiedValuesArray = CSSUsage.CSSValues.createValueArray(styleValue, normalizedKey);
+					var values = new Array();
+					for (var j = specifiedValuesArray.length; j--;) {
+						values.push(CSSUsage.CSSValues.parseValues(specifiedValuesArray[j], normalizedKey));
 					}
 
 					for (var gs = 0; gs < generalizedSelectorsData.length; gs++) {
@@ -1075,6 +1090,15 @@ void function () {
 
 							var cssUsageMeta = element.CSSUsage || (element.CSSUsage = Object.create(null));
 							var knownValues = cssUsageMeta[normalizedKey] || (cssUsageMeta[normalizedKey] = []);
+
+							knownValues.valuesArray = knownValues.valuesArray || (knownValues.valuesArray = []);
+
+							for (var sv = 0; sv < specifiedValuesArray.length; sv++) {
+								var currentSV = specifiedValuesArray[sv];
+								if (knownValues.valuesArray.indexOf(currentSV) == -1) {
+									knownValues.valuesArray.push(currentSV);
+								}
+							}
 
 							if (knownValues.length == 0) {
 								propObject.count += 1;
@@ -1307,6 +1331,9 @@ void function () {
 				CSSUsage.PropertyValuesAnalyzer.finalize();
 				CSSUsage.SelectorAnalyzer.finalize();
 
+				CSSUsage.StyleWalker.runRecipes = true;
+				CSSUsage.StyleWalker.walkOverDomElements();
+
 				CSSUsageResults.duration = performance.now() - startTime | 0;
 
 				if (window.debugCSSUsage) console.log(CSSUsageResults);
@@ -1318,5 +1345,62 @@ void function () {
 	} catch (ex) {
 		throw ex;
 	}
+}();
+
+
+void function () {
+	window.CSSUsage.StyleWalker.recipesToRun.push(function metaviewport(element, results) {
+		var needles = ["width", "height", "initial-scale", "minimum-scale", "maximum-scale", "user-scalable"];
+
+		if (element.nodeName == "META") {
+			for (var n = 0; n < element.attributes.length; n++) {
+				if (element.attributes[n].name == "content") {
+
+					for (var needle = 0; needle < needles.length; needle++) {
+						var value = element.attributes[n].value;
+
+						if (value.indexOf(needles[needle] != -1)) {
+							results[value] = results[value] || { count: 0 };
+							results[value].count++;
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		return results;
+	});
+}();
+
+
+void function () {
+	window.CSSUsage.StyleWalker.recipesToRun.push(function paddingHack(element, results) {
+		if (!element.CSSUsage || !(element.CSSUsage["padding-bottom"] || element.CSSUsage["padding-top"])) return;
+
+		var values = [];
+
+		if (element.CSSUsage["padding-top"]) {
+			values = values.concat(element.CSSUsage["padding-top"].valuesArray);
+		}
+
+		if (element.CSSUsage["padding-bottom"]) {
+			values = values.concat(element.CSSUsage["padding-bottom"].valuesArray);
+		}
+
+		for (var i = 0; i < values.length; i++) {
+			if (values[i].indexOf('%')) {
+				var value = values[i].replace('%', "");
+				value = parseFloat(value);
+
+				if (value > 50) {
+					results[value] = results[value] || { count: 0 };
+					results[value].count++;
+				}
+			}
+		}
+
+		return results;
+	});
 }();
 //# sourceMappingURL=cssUsage.min.js.map

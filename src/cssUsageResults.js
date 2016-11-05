@@ -50,6 +50,7 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 	// Collect the results (css)
 	INSTRUMENTATION_RESULTS.css = CSSUsageResults;
 	INSTRUMENTATION_RESULTS.html = HtmlUsageResults;
+	INSTRUMENTATION_RESULTS.recipe = RecipeResults;
 	
 	// Convert it to a more efficient format
 	INSTRUMENTATION_RESULTS_TSV = convertToTSV(INSTRUMENTATION_RESULTS);
@@ -100,6 +101,10 @@ window.onCSSUsageResults = function onCSSUsageResults(CSSUsageResults) {
 
 		currentRowTemplate.push('html');
 		convertToTSV(INSTRUMENTATION_RESULTS['html']);
+		currentRowTemplate.pop();
+
+		currentRowTemplate.push('recipe');
+		convertToTSV(INSTRUMENTATION_RESULTS['recipe']);
 		currentRowTemplate.pop();
 		
 		//currentRowTemplate.push('scripts');
