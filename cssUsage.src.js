@@ -1319,6 +1319,12 @@ void function () {
 					return;
 				}
 
+				if (document.styleSheets.length == 1 && browserIsFirefox) {
+					if (document.styleSheets[0].href.indexOf('aboutNetError') != -1) {
+						return;
+					}
+				}
+
 				var startTime = performance.now();
 
 				CSSUsage.StyleWalker.ruleAnalyzers.push(CSSUsage.PropertyValuesAnalyzer);
@@ -1346,7 +1352,6 @@ void function () {
 		throw ex;
 	}
 }();
-
 
 void function () {
 	window.CSSUsage.StyleWalker.recipesToRun.push(function metaviewport(element, results) {
