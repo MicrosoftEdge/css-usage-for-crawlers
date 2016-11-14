@@ -577,6 +577,10 @@ void function () {
 	window.HtmlUsage = {};
 
 	window.HtmlUsage.GetNodeName = function (element) {
+		if (element instanceof HTMLUnknownElement) {
+			return;
+		}
+
 		var node = element.nodeName;
 
 		var tags = HtmlUsageResults.tags || (HtmlUsageResults.tags = {});
@@ -590,13 +594,29 @@ void function () {
 		for (var i = 0; i < element.attributes.length; i++) {
 			var att = element.attributes[i];
 
-			if (att.nodeName.indexOf('data-') == -1) {
+			if (IsValidAttribute(element, att.nodeName)) {
 				var attributes = HtmlUsageResults.attributes || (HtmlUsageResults.attributes = {});
 				var attribute = attributes[att.nodeName] || (attributes[att.nodeName] = {});
 				var attributeTag = attribute[node] || (attribute[node] = { count: 0 });
 				attributeTag.count++;
 			}
 		}
+	}
+
+	function IsValidAttribute(element, attname) {
+		if (attname == "class") {
+			attname = "className";
+		}
+
+		if (attname == "classname") {
+			return false;
+		}
+
+		if (attname.indexOf('data-') != -1) {
+			return false;
+		}
+
+		return true;
 	}
 }();
 void function () {
@@ -759,9 +779,9 @@ void function () {
 				for (var i = 0; i < elements.length; i++) {
 					var element = elements[i];
 
-					runElementAnalyzers(element, index);
-
 					if (!CSSUsage.StyleWalker.runRecipes) {
+						runElementAnalyzers(element, index);
+
 						if (element.hasAttribute('style')) {
 							var ruleType = 1;
 							var isInline = true;
@@ -1352,6 +1372,7 @@ void function () {
 		throw ex;
 	}
 }();
+
 
 void function () {
 	window.CSSUsage.StyleWalker.recipesToRun.push(function metaviewport(element, results) {
