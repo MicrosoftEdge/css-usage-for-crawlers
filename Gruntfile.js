@@ -9,7 +9,7 @@ module.exports = function(grunt) {
               'src/cssUsageResults.js',
               'css-usage/cssUsage.src.js',
             ],
-            dest: 'cssUsage.src.min.js'
+            dest: 'cssUsage.min.js'
         }
     }
   });
