@@ -1,0 +1,8 @@
+Put the urls you would like crawled
+with the domains on an individual line.
+
+For example:
+
+www.microsoft.com
+www.bing.com
+www.microsoftedge.com
